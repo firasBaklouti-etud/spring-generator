@@ -201,7 +201,15 @@ npm run type-check   # TypeScript type checking
   - Search functionality
   - Visual category badges
 - Generation summary
+- Generation summary
 - Download ZIP file
+
+#### **Phase 4: IDE Preview (New)**
+- **CodePreviewModal**: Full-screen IDE-like interface
+- **File Tree**: Navigate through generated project structure
+- **Monaco Editor**: View and edit files with syntax highlighting
+- **Live Editing**: Modify code before downloading
+- **Download**: Generate ZIP with your custom changes
 
 ---
 

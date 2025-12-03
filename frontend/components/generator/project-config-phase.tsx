@@ -4,18 +4,17 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Rocket,
-  Download,
-  Loader2,
   Package,
-  Code2,
   Settings,
-  CheckCircle2,
-  ArrowLeft,
-  Sparkles,
+  Code2,
+  Download,
   Plus,
   X,
+  ArrowLeft,
+  CheckCircle2,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,40 +22,51 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useGeneratorStore, type DependencyGroup } from "@/lib/store"
 import { DependenciesModal, DEPENDENCY_GROUPS } from "./dependencies-modal"
+import { CodePreviewModal } from "./code-preview-modal"
+import { toast } from "sonner"
 
 const javaVersions = ["17", "21"]
 const bootVersions = ["3.2.0", "3.1.5", "3.0.12"]
 
-// Helper to get category color
-function getCategoryColor(groupName: string): string {
-  const colors: Record<string, string> = {
-    "Developer Tools": "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    Web: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    Security: "bg-red-500/20 text-red-400 border-red-500/30",
-    SQL: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    NoSQL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    Messaging: "bg-pink-500/20 text-pink-400 border-pink-500/30",
-    "I/O": "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-    Ops: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-    Testing: "bg-teal-500/20 text-teal-400 border-teal-500/30",
-  }
-  return colors[groupName] || "bg-gray-500/20 text-gray-400 border-gray-500/30"
-}
-
-// Get dependency info from ID
-function getDependencyInfo(depId: string): { name: string; group: string } | null {
+const getDependencyInfo = (id: string) => {
   for (const group of DEPENDENCY_GROUPS) {
-    const dep = group.dependencies.find((d) => d.id === depId)
-    if (dep) return { name: dep.name, group: group.name }
+    const dep = group.dependencies.find((d) => d.id === id)
+    if (dep) return { ...dep, group: group.name }
   }
   return null
 }
 
+const getCategoryColor = (category: string) => {
+  switch (category) {
+    case "Web":
+      return "text-blue-400 border-blue-400/30 bg-blue-400/10"
+    case "Data":
+      return "text-green-400 border-green-400/30 bg-green-400/10"
+    case "Security":
+      return "text-red-400 border-red-400/30 bg-red-400/10"
+    case "Ops":
+      return "text-purple-400 border-purple-400/30 bg-purple-400/10"
+    default:
+      return "text-gray-400 border-gray-400/30 bg-gray-400/10"
+  }
+}
+
 export function ProjectConfigPhase() {
-  const { tables, projectConfig, setProjectConfig, setCurrentPhase, isGenerating, setIsGenerating, reset } =
-    useGeneratorStore()
+  const {
+    tables,
+    projectConfig,
+    setProjectConfig,
+    setCurrentPhase,
+    isGenerating,
+    setIsGenerating,
+    reset,
+    setPreviewFiles,
+    previewFiles
+  } = useGeneratorStore()
   const [showSuccess, setShowSuccess] = useState(false)
   const [showDependenciesModal, setShowDependenciesModal] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false)
 
   const selectedDependencyIds = projectConfig.dependencies
 
@@ -69,74 +79,142 @@ export function ProjectConfigPhase() {
     setProjectConfig({ dependencies: updated })
   }
 
+  const getProjectPayload = () => {
+    // Convert dependency IDs to full Dependency objects
+    const fullDependencies = selectedDependencyIds.map((depId) => {
+      for (const group of DEPENDENCY_GROUPS) {
+        const dep = group.dependencies.find((d) => d.id === depId)
+        if (dep) return dep
+      }
+      // Fallback if dependency not found
+      return {
+        id: depId,
+        name: depId,
+        description: "",
+        groupId: "",
+        artifactId: depId,
+        scope: "compile",
+        isStarter: false,
+      }
+    })
+
+    return {
+      groupId: projectConfig.groupId,
+      artifactId: projectConfig.artifactId,
+      name: projectConfig.name,
+      description: projectConfig.description,
+      packageName: projectConfig.packageName,
+      javaVersion: projectConfig.javaVersion,
+      bootVersion: projectConfig.bootVersion,
+      dependencies: fullDependencies,
+      includeEntity: projectConfig.includeEntity,
+      includeRepository: projectConfig.includeRepository,
+      includeService: projectConfig.includeService,
+      includeController: projectConfig.includeController,
+      includeDto: projectConfig.includeDto,
+      includeMapper: projectConfig.includeMapper,
+      tables: tables.map((table) => ({
+        name: table.name,
+        className: table.className,
+        columns: table.columns.map((col) => ({
+          name: col.name,
+          fieldName: col.fieldName,
+          javaType: col.javaType,
+          type: col.type,
+          length: col.length,
+          primaryKey: col.primaryKey,
+          autoIncrement: col.autoIncrement,
+          nullable: col.nullable,
+          unique: col.unique,
+          foreignKey: col.foreignKey,
+          referencedTable: col.referencedTable,
+          referencedColumn: col.referencedColumn,
+        })),
+        relationships: table.relationships.map((rel) => ({
+          type: typeof rel.type === "object" ? (rel.type as any).type : rel.type,
+          sourceTable: rel.sourceTable,
+          targetTable: rel.targetTable,
+          sourceColumn: rel.sourceColumn,
+          targetColumn: rel.targetColumn,
+          joinTable: rel.joinTable,
+          mappedBy: rel.mappedBy,
+          fieldName: rel.fieldName,
+          targetClassName: rel.targetClassName,
+        })),
+        isJoinTable: table.isJoinTable,
+      })),
+    }
+  }
+
+  const handlePreview = async () => {
+    setIsPreviewLoading(true)
+    try {
+      const payload = getProjectPayload()
+      const response = await fetch("http://localhost:8080/api/generate/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setPreviewFiles(data.files)
+        setShowPreview(true)
+      } else {
+        throw new Error("Failed to generate preview")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to generate preview")
+    } finally {
+      setIsPreviewLoading(false)
+    }
+  }
+
+  const handleDownloadFromFiles = async () => {
+    setIsGenerating(true)
+    try {
+      const payload = {
+        files: previewFiles,
+        artifactId: projectConfig.artifactId
+      }
+
+      const response = await fetch("http://localhost:8080/api/generate/from-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `${projectConfig.artifactId}.zip`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        setShowPreview(false)
+        setShowSuccess(true)
+        toast.success("Project downloaded successfully!")
+      } else {
+        throw new Error("Failed to download project")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to download project")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const handleGenerate = async () => {
     setIsGenerating(true)
 
     try {
-      // Convert dependency IDs to full Dependency objects
-      const fullDependencies = selectedDependencyIds.map((depId) => {
-        for (const group of DEPENDENCY_GROUPS) {
-          const dep = group.dependencies.find((d) => d.id === depId)
-          if (dep) return dep
-        }
-        // Fallback if dependency not found
-        return {
-          id: depId,
-          name: depId,
-          description: "",
-          groupId: "",
-          artifactId: depId,
-          scope: "compile",
-          isStarter: false,
-        }
-      })
-
-      const payload = {
-        groupId: projectConfig.groupId,
-        artifactId: projectConfig.artifactId,
-        name: projectConfig.name,
-        description: projectConfig.description,
-        packageName: projectConfig.packageName,
-        javaVersion: projectConfig.javaVersion,
-        bootVersion: projectConfig.bootVersion,
-        dependencies: fullDependencies, // Send full Dependency objects
-        includeEntity: projectConfig.includeEntity,
-        includeRepository: projectConfig.includeRepository,
-        includeService: projectConfig.includeService,
-        includeController: projectConfig.includeController,
-        includeDto: projectConfig.includeDto,
-        includeMapper: projectConfig.includeMapper,
-        tables: tables.map((table) => ({
-          name: table.name,
-          className: table.className,
-          columns: table.columns.map((col) => ({
-            name: col.name,
-            fieldName: col.fieldName,
-            javaType: col.javaType,
-            type: col.type, // This is the SQL type
-            length: col.length,
-            primaryKey: col.primaryKey,
-            autoIncrement: col.autoIncrement,
-            nullable: col.nullable,
-            unique: col.unique,
-            foreignKey: col.foreignKey,
-            referencedTable: col.referencedTable,
-            referencedColumn: col.referencedColumn,
-          })),
-          relationships: table.relationships.map((rel) => ({
-            type: typeof rel.type === "object" ? rel.type.type : rel.type,
-            sourceTable: rel.sourceTable,
-            targetTable: rel.targetTable,
-            sourceColumn: rel.sourceColumn,
-            targetColumn: rel.targetColumn,
-            joinTable: rel.joinTable,
-            mappedBy: rel.mappedBy,
-            fieldName: rel.fieldName,
-            targetClassName: rel.targetClassName,
-          })),
-          isJoinTable: table.isJoinTable,
-        })),
-      }
+      const payload = getProjectPayload()
 
       try {
         console.log("Generating project...")
@@ -195,7 +273,7 @@ ${t.columns.map((c) => `  - ${c.fieldName}: ${c.javaType}${c.foreignKey ? ` (FK 
 
 ---
 Generated by Spring Generator
-        `.trim()
+      `.trim()
 
         const blob = new Blob([mockContent], { type: "text/plain" })
         const url = window.URL.createObjectURL(blob)
@@ -525,13 +603,28 @@ Generated by Spring Generator
                   : {}
               }
               transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
-              className="w-full sm:w-auto rounded-xl"
+              className="w-full sm:w-auto rounded-xl flex gap-3"
             >
               <Button
-                onClick={handleGenerate}
-                disabled={isGenerating || tables.length === 0}
+                onClick={handlePreview}
+                disabled={isPreviewLoading || isGenerating || tables.length === 0}
                 size="lg"
-                className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity px-8"
+                variant="outline"
+                className="flex-1 sm:flex-none glass bg-transparent hover:bg-secondary/50"
+              >
+                {isPreviewLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : (
+                  <Code2 className="w-5 h-5 mr-2" />
+                )}
+                Preview & Edit
+              </Button>
+
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating || isPreviewLoading || tables.length === 0}
+                size="lg"
+                className="flex-1 sm:flex-none bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity px-8"
               >
                 {isGenerating ? (
                   <span className="flex items-center gap-2">
@@ -560,6 +653,14 @@ Generated by Spring Generator
           />
         )}
       </AnimatePresence>
+
+      {/* Code Preview Modal */}
+      <CodePreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        onDownload={handleDownloadFromFiles}
+        isDownloading={isGenerating}
+      />
     </div>
   )
 }

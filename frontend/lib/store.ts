@@ -77,6 +77,12 @@ export interface ProjectConfig {
   includeMapper: boolean
 }
 
+export interface FilePreview {
+  path: string
+  content: string
+  language: string
+}
+
 interface GeneratorStore {
   // Current phase
   currentPhase: number
@@ -103,6 +109,11 @@ interface GeneratorStore {
   // Project configuration
   projectConfig: ProjectConfig
   setProjectConfig: (config: Partial<ProjectConfig>) => void
+
+  // Preview files
+  previewFiles: FilePreview[]
+  setPreviewFiles: (files: FilePreview[]) => void
+  updatePreviewFile: (path: string, content: string) => void
 
   // Loading states
   isParsing: boolean
@@ -193,6 +204,13 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
       projectConfig: { ...state.projectConfig, ...config },
     })),
 
+  previewFiles: [],
+  setPreviewFiles: (files) => set({ previewFiles: files }),
+  updatePreviewFile: (path, content) =>
+    set((state) => ({
+      previewFiles: state.previewFiles.map((f) => (f.path === path ? { ...f, content } : f)),
+    })),
+
   isParsing: false,
   setIsParsing: (loading) => set({ isParsing: loading }),
   isGenerating: false,
@@ -206,6 +224,7 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
       history: [],
       historyIndex: -1,
       projectConfig: defaultProjectConfig,
+      previewFiles: [],
       isParsing: false,
       isGenerating: false,
     }),

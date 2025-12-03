@@ -69,7 +69,7 @@ export function SchemaEditorPhase() {
           }
 
           const relType = typeof rel.type === "object" ? rel.type.type : rel.type
-          
+
           // Determine source and target based on relationship type
           let sourceId = table.id
           let targetId = targetTable.id
@@ -83,7 +83,7 @@ export function SchemaEditorPhase() {
           }
 
           const finalEdgeId = `${sourceId}-${targetId}-${rel.fieldName}`
-          
+
           flowEdges.push({
             id: finalEdgeId,
             source: sourceId,
@@ -127,7 +127,7 @@ export function SchemaEditorPhase() {
             const existingRelationship = table.relationships.some(
               (rel) => rel.targetTable.toLowerCase() === referencedTable.name.toLowerCase()
             )
-            
+
             // Check if we already have an edge between these tables (in either direction)
             const existingEdge = Array.from(addedEdges).some(
               (id) => id.includes(`${table.id}-${referencedTable.id}`) || id.includes(`${referencedTable.id}-${table.id}`)
@@ -135,7 +135,7 @@ export function SchemaEditorPhase() {
 
             if (!existingRelationship && !existingEdge) {
               const edgeId = `fk-${referencedTable.id}-${table.id}-${column.name}`
-              
+
               flowEdges.push({
                 id: edgeId,
                 source: referencedTable.id,
