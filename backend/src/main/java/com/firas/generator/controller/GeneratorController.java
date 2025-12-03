@@ -1,6 +1,9 @@
 package com.firas.generator.controller;
 
+import com.firas.generator.model.DownloadRequest;
+import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.ProjectRequest;
+import com.firas.generator.model.ProjectPreviewResponse;
 import com.firas.generator.service.ProjectGeneratorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -9,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * REST Controller for generating Spring Boot projects.
@@ -57,4 +61,43 @@ public class GeneratorController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(zipContent);
     }
+    
+    /**
+     * Generates project files and returns them as JSON for preview/editing in the IDE interface.
+     * 
+     * This endpoint creates all project files (pom.xml, Java classes, properties files, etc.)
+     * and returns them as a structured JSON response containing file paths, contents, and
+     * detected programming languages for syntax highlighting.
+     * 
+     * @param request The project configuration containing all generation parameters
+     * @return ResponseEntity containing the list of generated files as FilePreview objects
+     * @throws IOException If an error occurs during project generation
+     */
+    @PostMapping("/preview")
+    public ResponseEntity<ProjectPreviewResponse> previewProject(@RequestBody ProjectRequest request) throws IOException {
+        List<FilePreview> files = projectGeneratorService.generateProjectPreview(request);
+        return ResponseEntity.ok(new ProjectPreviewResponse(files));
+    }
+    
+    /**
+     * Creates a ZIP file from a list of file previews (potentially edited by the user).
+     * 
+     * This endpoint allows users to download their edited files as a complete project.
+     * It accepts a list of files with their paths and contents, writes them to a
+     * temporary directory structure, and returns them as a ZIP file.
+     * 
+     * @param request The download request containing files and artifact ID
+     * @return ResponseEntity containing the ZIP file as byte array
+     * @throws IOException If an error occurs during ZIP creation
+     */
+    @PostMapping("/from-files")
+    public ResponseEntity<byte[]> generateProjectFromFiles(@RequestBody DownloadRequest request) throws IOException {
+        byte[] zipContent = projectGeneratorService.generateZipFromFiles(request.getFiles(), request.getArtifactId());
+        
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + request.getArtifactId() + ".zip")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(zipContent);
+    }
+    
 }

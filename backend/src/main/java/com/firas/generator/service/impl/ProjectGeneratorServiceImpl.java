@@ -1,6 +1,7 @@
 package com.firas.generator.service.impl;
 
 import com.firas.generator.model.DependencyMetadata;
+import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.ProjectRequest;
 import com.firas.generator.model.Table;
 import com.firas.generator.service.DependencyRegistry;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
@@ -234,5 +236,188 @@ public class ProjectGeneratorServiceImpl implements ProjectGeneratorService {
     private String toClassName(String name) {
         if (name == null || name.isEmpty()) return "Demo";
         return name.substring(0, 1).toUpperCase() + name.substring(1);
+    }
+    
+    /**
+     * Generates project files and returns them as a list for preview/editing.
+     * Creates all project files in a temporary directory, reads them into FilePreview objects,
+     * and then cleans up the temporary directory.
+     * 
+     * @param request The project configuration
+     * @return List of FilePreview objects containing file paths and contents
+     * @throws IOException If an error occurs during generation
+     */
+    @Override
+    public List<FilePreview> generateProjectPreview(ProjectRequest request) throws IOException {
+        Path tempDir = Files.createTempDirectory("project-preview-");
+        File rootDir = tempDir.toFile();
+        
+        try {
+            String baseDirName = request.getArtifactId();
+            File projectDir = new File(rootDir, baseDirName);
+            projectDir.mkdirs();
+
+            // Generate structure
+            generateStructure(projectDir, request);
+            
+            // Generate pom.xml
+            generatePom(projectDir, request);
+            
+            // Generate Main Class
+            generateMainClass(projectDir, request);
+            
+            // Generate Application Properties
+            generateApplicationProperties(projectDir, request);
+            
+            // Generate CRUD from SQL
+            if (request.getTables() != null && !request.getTables().isEmpty()) {
+                generateCrud(projectDir, request);
+            }
+
+            // Read all generated files into FilePreview objects
+            return readProjectFiles(projectDir, baseDirName);
+            
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        } finally {
+            FileUtils.deleteDirectory(rootDir);
+        }
+    }
+    
+    /**
+     * Reads all files from a project directory into FilePreview objects.
+     * 
+     * @param projectDir The project root directory
+     * @param baseDirName The base directory name (used for relative paths)
+     * @return List of FilePreview objects
+     * @throws IOException If an error occurs reading files
+     */
+    private List<FilePreview> readProjectFiles(File projectDir, String baseDirName) throws IOException {
+        List<FilePreview> files = new java.util.ArrayList<>();
+        
+        Files.walk(projectDir.toPath())
+            .filter(Files::isRegularFile)
+            .forEach(path -> {
+                try {
+                    String content = Files.readString(path);
+                    String relativePath = projectDir.toPath().relativize(path).toString().replace("\\", "/");
+                    String language = detectLanguage(relativePath);
+                    
+                    files.add(new FilePreview(relativePath, content, language));
+                } catch (IOException e) {
+                    log.error("Error reading file: " + path, e);
+                }
+            });
+        
+        return files;
+    }
+    
+    /**
+     * Detects programming language from file extension.
+     * 
+     * @param filePath The file path
+     * @return Language identifier for syntax highlighting
+     */
+    private String detectLanguage(String filePath) {
+        String lowerPath = filePath.toLowerCase();
+        if (lowerPath.endsWith(".java")) return "java";
+        if (lowerPath.endsWith(".xml")) return "xml";
+        if (lowerPath.endsWith(".properties")) return "properties";
+        if (lowerPath.endsWith(".yml") || lowerPath.endsWith(".yaml")) return "yaml";
+        if (lowerPath.endsWith(".json")) return "json";
+        if (lowerPath.endsWith(".md")) return "markdown";
+        if (lowerPath.endsWith(".sql")) return "sql";
+        return "text";
+    }
+    
+    /**
+     * Creates a ZIP file from a list of file previews.
+     * This allows users to download their edited files as a complete project.
+     * 
+     * @param files List of files with paths and contents
+     * @param artifactId Project artifact ID for naming the ZIP
+     * @return Byte array containing the ZIP file
+     * @throws IOException If an error occurs during ZIP creation
+     */
+    @Override
+    public byte[] generateZipFromFiles(List<FilePreview> files, String artifactId) throws IOException {
+        if (files == null || files.isEmpty()) {
+            throw new IllegalArgumentException("Files list cannot be null or empty");
+        }
+
+        if (artifactId == null || artifactId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Artifact ID cannot be null or empty");
+        }
+
+        Path tempDir = Files.createTempDirectory("project-from-files-");
+        File rootDir = tempDir.toFile();
+
+        try {
+            File projectDir = new File(rootDir, artifactId);
+            if (!projectDir.mkdirs() && !projectDir.exists()) {
+                throw new IOException("Failed to create project directory: " + projectDir.getAbsolutePath());
+            }
+
+            // Write all files to the temporary directory
+            for (int i = 0; i < files.size(); i++) {
+                FilePreview file = files.get(i);
+
+                // Validate file
+                if (file == null) {
+                    throw new IllegalArgumentException("File at index " + i + " is null");
+                }
+
+                String filePath = file.getPath();
+                String content = file.getContent();
+
+                if (filePath == null || filePath.trim().isEmpty()) {
+                    throw new IllegalArgumentException("File path at index " + i + " is null or empty");
+                }
+
+                if (content == null) {
+                    // Set empty content instead of null
+                    content = "";
+                }
+
+                // Clean up the path
+                filePath = filePath.replace("\\", "/");
+                if (filePath.startsWith("/")) {
+                    filePath = filePath.substring(1);
+                }
+
+                File targetFile = new File(projectDir, filePath);
+
+                // Create parent directories if they don't exist
+                File parentDir = targetFile.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    if (!parentDir.mkdirs() && !parentDir.exists()) {
+                        throw new IOException("Failed to create directory: " + parentDir.getAbsolutePath());
+                    }
+                }
+
+                // Write file content
+                try {
+                    Files.writeString(targetFile.toPath(), content, StandardCharsets.UTF_8);
+                    log.info("Written file: {}", targetFile.getAbsolutePath());
+                } catch (Exception e) {
+                    throw new IOException("Failed to write file: " + filePath, e);
+                }
+            }
+
+            // Zip the directory
+            return ZipUtils.zipDirectory(projectDir);
+
+        } catch (Exception e) {
+            log.error("Error generating zip from files", e);
+            throw e;
+        } finally {
+            try {
+                if (rootDir.exists()) {
+                    FileUtils.deleteDirectory(rootDir);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to clean up temporary directory: {}", rootDir.getAbsolutePath(), e);
+            }
+        }
     }
 }

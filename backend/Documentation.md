@@ -338,6 +338,53 @@ curl "http://localhost:8080/api/sqlParser/CREATE%20TABLE%20users%20(id%20BIGINT%
 
 **Response**: ZIP file download
 
+### 4. Generate Project Preview (IDE Mode)
+**Endpoint**: `POST /api/generate/preview`
+
+**Description**: Generates project files in memory and returns them as a JSON structure for previewing.
+
+**Request Body**: Same as `POST /api/generate/project`
+
+**Response**:
+```json
+{
+  "files": [
+    {
+      "path": "pom.xml",
+      "content": "<project>...</project>",
+      "language": "xml"
+    },
+    {
+      "path": "src/main/java/com/example/DemoApplication.java",
+      "content": "package com.example...",
+      "language": "java"
+    }
+  ]
+}
+```
+
+### 5. Generate ZIP from Files
+**Endpoint**: `POST /api/generate/from-files`
+
+**Description**: Accepts a list of files (potentially modified in the IDE) and returns them as a ZIP archive.
+
+**Request Body**:
+```json
+{
+  "artifactId": "demo",
+  "files": [
+    {
+      "path": "pom.xml",
+      "content": "...",
+      "language": "xml"
+    },
+    ...
+  ]
+}
+```
+
+**Response**: ZIP file download
+
 ---
 
 ## Workflow: Two-Phase Project Generation
