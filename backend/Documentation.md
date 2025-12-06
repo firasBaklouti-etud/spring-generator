@@ -808,6 +808,205 @@ Content-Type: application/json
 }
 ```
 
+### AI Provider Architecture
+
+The backend implements a **flexible, multi-provider architecture** using the Factory pattern, allowing you to switch between different AI providers (Google ADK, OpenAI, Anthropic) without code changes.
+
+#### Components
+
+**1. AIProvider Interface** (`service/ai/AIProvider.java`)
+
+Defines the contract for all AI providers:
+
+```java
+public interface AIProvider {
+    AIGeneratedTables generateTables(AIGeneratedTablesRequest request);
+    String getProviderName();
+    boolean isAvailable();
+}
+```
+
+**2. AIProviderFactory** (`service/ai/AIProviderFactory.java`)
+
+Factory class for managing and creating AI provider instances:
+
+```java
+@Component
+public class AIProviderFactory {
+    private final Map<String, AIProvider> providers;
+    
+    // Auto-discovers all AI provider implementations via Spring dependency injection
+    @Autowired
+    public AIProviderFactory(List<AIProvider> providerList) {
+        this.providers = providerList.stream()
+            .collect(Collectors.toMap(
+                AIProvider::getProviderName,
+                Function.identity()
+            ));
+    }
+    
+    public AIProvider getProvider(String providerName);      // Get specific provider
+    public AIProvider getDefaultProvider();                  // Get first available
+    public List<String> getAvailableProviders();            // List all available
+}
+```
+
+**3. Provider Implementations**
+
+##### Google ADK Provider (`providers/GoogleADKProvider.java`)
+- Uses Google's Agent Development Kit
+- Model: `gemini-2.0-flash`
+- Always available (no API key required)
+- Provides detailed SQL schema instructions
+- Reactive processing with RxJava
+
+```java
+@Component
+public class GoogleADKProvider implements AIProvider {
+    @Override
+    public String getProviderName() { return "GOOGLE_ADK"; }
+    
+    @Override
+    public boolean isAvailable() { return rootAgent != null; }
+}
+```
+
+##### OpenAI Provider (`providers/OpenAIProvider.java`)
+- Uses OpenAI Chat Completions API
+- Default model: `gpt-4`
+- Requires API key configuration
+- REST-based communication
+
+```java
+@Component
+public class OpenAIProvider implements AIProvider {
+    @Value("${ai.openai.api-key:}")
+    private String apiKey;
+    
+    @Value("${ai.openai.model:gpt-4}")
+    private String model;
+    
+    @Override
+    public boolean isAvailable() { 
+        return apiKey != null && !apiKey.trim().isEmpty(); 
+    }
+}
+```
+
+##### Anthropic Claude Provider (`providers/AnthropicProvider.java`)
+- Uses Anthropic Messages API
+- Default model: `claude-sonnet-4-20250514`
+- Requires API key and enablement flag
+- Conditional loading via `@ConditionalOnProperty`
+
+```java
+@Component
+@ConditionalOnProperty(name = "ai.anthropic.enabled", havingValue = "true")
+public class AnthropicProvider implements AIProvider {
+    @Value("${ai.anthropic.api-key:}")
+    private String apiKey;
+    
+    @Value("${ai.anthropic.model:claude-sonnet-4-20250514}")
+    private String model;
+}
+```
+
+#### Configuration
+
+**application.properties:**
+
+```properties
+# Default AI Provider (GOOGLE_ADK, OPENAI, or ANTHROPIC)
+ai.provider.default=GOOGLE_ADK
+
+# OpenAI Configuration
+ai.openai.api-key=your-openai-api-key
+ai.openai.model=gpt-4
+ai.openai.api-url=https://api.openai.com/v1/chat/completions
+
+# Anthropic Configuration  
+ai.anthropic.enabled=false
+ai.anthropic.api-key=your-anthropic-api-key
+ai.anthropic.model=claude-sonnet-4-20250514
+ai.anthropic.api-url=https://api.anthropic.com/v1/messages
+```
+
+#### Provider Selection
+
+**1. Default Provider (via configuration):**
+```java
+@Service
+public class AIGeneratedTablesService {
+    @Value("${ai.provider.default:GOOGLE_ADK}")
+    private String defaultProviderName;
+    
+    public AIGeneratedTables generateTables(AIGeneratedTablesRequest request) {
+        return generateTables(request, defaultProviderName);
+    }
+}
+```
+
+**2. Specific Provider (via parameter):**
+```java
+public AIGeneratedTables generateTables(
+    AIGeneratedTablesRequest request, 
+    String providerName
+) {
+    AIProvider provider = aiProviderFactory.getProvider(providerName);
+    return provider.generateTables(request);
+}
+```
+
+**3. Get Available Providers:**
+```java
+public List<String> getAvailableProviders() {
+    return aiProviderFactory.getAvailableProviders();
+}
+```
+
+#### Provider Availability
+
+Providers are considered available based on:
+
+| Provider | Availability Criteria |
+|----------|----------------------|
+| Google ADK | Always (built-in agent) |
+| OpenAI | API key is configured |
+| Anthropic | Enabled flag + API key configured |
+
+#### Example Usage
+
+**Use Default Provider:**
+```bash
+curl -X POST http://localhost:8080/api/ai/generateTables \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create users and orders tables",
+    "currentTables": []
+  }'
+```
+
+**Use Specific Provider (if supported in controller):**
+```bash
+curl -X POST http://localhost:8080/api/ai/generateTables?provider=OPENAI \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create users and orders tables",
+    "currentTables": []
+  }'
+```
+
+#### Benefits
+
+✅ **Flexibility**: Switch AI providers without code changes  
+✅ **Vendor Independence**: Not locked into a single AI vendor  
+✅ **Extensibility**: Easy to add new providers  
+✅ **Resilience**: Fallback to different providers  
+✅ **Cost Optimization**: Choose based on pricing needs  
+✅ **Feature Selection**: Use provider-specific capabilities
+
+---
+
 ### Action Types
 
 The AI can perform four types of schema modifications:
@@ -852,9 +1051,11 @@ Completely replaces the entire schema. Requires `allowDestructive: true`.
 }
 ```
 
-### LLM Agent Configuration
+### Action Types
 
-The `AIGeneratedTablesService` configures a specialized LLM agent with detailed instructions:
+### LLM Agent Configuration (Google ADK)
+
+The `GoogleADKProvider` configures a specialized LLM agent with detailed instructions:
 
 **Model**: `gemini-2.0-flash`
 
@@ -977,5 +1178,5 @@ For questions or support, contact: [Your contact information]
 
 ---
 
-**Last Updated**: 2025-12-06
-**Version**: 2.0
+**Last Updated**: 2025-12-07
+**Version**: 2.1
