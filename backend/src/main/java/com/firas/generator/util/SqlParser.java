@@ -13,37 +13,35 @@ import java.util.*;
 public class SqlParser {
 
     public List<Table> parseSql(String sql) throws SQLException {
-        String dbName = "temperorly";
-        String user = "root";
-        String pass = "";
-        String baseUrl = "jdbc:mysql://localhost:3306/";
+        // Your actual Neon connection details from the error
+        String dbName = "neondb";
+        String user = "neondb_owner";
+        String pass = "npg_1kMXRKqy0vEH";
+        String baseUrl = "jdbc:postgresql://ep-hidden-dawn-agq8fr8x-pooler.c-2.eu-central-1.aws.neon.tech/";
 
-        // 1. Drop and recreate the database
-        try (Connection rootConn = DriverManager.getConnection(baseUrl, user, pass)) {
-            rootConn.prepareStatement("DROP DATABASE IF EXISTS " + dbName).execute();
-            rootConn.prepareStatement("CREATE DATABASE " + dbName).execute();
-        }
+        // Full connection URL
+        String url = baseUrl + dbName + "?sslmode=require";
 
-        // 2. Connect to the freshly created database
-        String url = baseUrl + dbName + "?useSSL=false&serverTimezone=UTC";
         try (Connection conn = DriverManager.getConnection(url, user, pass)) {
 
-            // 3. Execute the SQL dump
+            // Clean all existing tables in the public schema
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+            }
+
+            // 2. Execute the SQL dump
             for (String stmt : sql.split(";")) {
                 if (!stmt.trim().isEmpty()) {
                     conn.prepareStatement(stmt).execute();
                 }
             }
 
-            // 4. Parse metadata using your existing method
+            // 3. Parse metadata using your existing method
             List<Table> tables = loadMetadata(conn);
             System.out.println(tables);
             return tables;
         }
     }
-
-
-
     public List<Table> loadMetadata(Connection connection) throws SQLException {
 
         DatabaseMetaData meta = connection.getMetaData();
