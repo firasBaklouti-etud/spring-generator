@@ -176,7 +176,7 @@ export function ProjectConfigPhase() {
     setIsPreviewLoading(true)
     try {
       const payload = getProjectPayload()
-      const response = await fetch("http://localhost:8080/api/generate/preview", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -208,7 +208,7 @@ export function ProjectConfigPhase() {
             : projectConfig.name.toLowerCase().replace(/\s+/g, "-"),
       }
 
-      const response = await fetch("http://localhost:8080/api/generate/from-files", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate/from-files`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -248,7 +248,7 @@ export function ProjectConfigPhase() {
       try {
         console.log("Generating project...")
         console.log(JSON.stringify(payload))
-        const response = await fetch("http://localhost:8080/api/generate/project", {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate/project`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -316,7 +316,7 @@ const aiGenerateSchema = async (
   console.log('Sending AI request:', requestBody)
 
   // Call your backend API
-  const response = await fetch('http://localhost:8080/api/ai/generateTables', {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/ai/generateTables`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

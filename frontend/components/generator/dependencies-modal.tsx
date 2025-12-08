@@ -56,7 +56,7 @@ export function DependenciesModal({
         setIsLoading(true)
         setError(null)
 
-        const response = await fetch(`http://localhost:8080/api/dependencies/groups?stackType=${stackType}`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/dependencies/groups?stackType=${stackType}`)
 
         if (!response.ok) {
           throw new Error(`Failed to fetch dependencies: ${response.status}`)

@@ -275,7 +275,7 @@ export function SqlParserPhase() {
         try {
             // Try API first
             const encodedSql = encodeURIComponent(sqlInput)
-            const response = await fetch(`http://localhost:8080/api/sqlParser/${encodedSql}`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/sqlParser/${encodedSql}`, {
                 method: "GET",
                 signal: AbortSignal.timeout(5000),
             })
