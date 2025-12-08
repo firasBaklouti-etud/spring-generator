@@ -13,10 +13,10 @@ import java.util.*;
 public class SqlParser {
 
     public List<Table> parseSql(String sql) throws SQLException {
-        String dbName = "freedb_springboot";
-        String user = "freedb_freedb_spring_user";
-        String pass = "xFxFCw5?X!HsWEA";
-        String host="sql.freedb.tech:3306/";
+        String dbName = System.getenv("DB_NAME");
+        String user = System.getenv("DB_USER");
+        String pass = System.getenv("DB_PASSWORD");
+        String host = System.getenv("DB_HOST");
 
 
         // First connection URL (without database name for DROP/CREATE operations)
