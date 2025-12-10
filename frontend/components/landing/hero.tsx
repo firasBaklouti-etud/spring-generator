@@ -73,7 +73,7 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-6 text-balance"
           >
-            Build Spring Boot Projects <span className="gradient-text">in Seconds</span>
+            Generate <span className="gradient-text">Full-Stack Projects</span> in Seconds
           </motion.h1>
 
           {/* Subheadline */}
@@ -83,8 +83,7 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 text-pretty"
           >
-            Transform your SQL schemas into production-ready Spring Boot applications. Visual schema editor, instant
-            code generation, and everything you need to ship faster.
+            Transform your SQL schemas (MySQL, PostgreSQL) into production-ready backends. Support for Spring Boot, Node.js, NestJS, and FastAPI.
           </motion.p>
 
           {/* CTA Buttons */}

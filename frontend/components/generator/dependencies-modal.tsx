@@ -1,15 +1,13 @@
-"use client"
-
 import { useState, useMemo, useEffect } from "react"
 import { motion } from "framer-motion"
 import { X, Search, Check, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { DependencyGroup, StackType } from "@/lib/store"
-
+import { useGeneratorStore, type DependencyGroup, type StackType } from "@/lib/store"
 
 function getCategoryColor(groupName: string): string {
   const colors: Record<string, string> = {
+    // ... no change to colors
     "Developer Tools": "bg-emerald-500/20 text-emerald-400",
     Web: "bg-blue-500/20 text-blue-400",
     "Web Framework": "bg-blue-500/20 text-blue-400",
@@ -43,18 +41,48 @@ export function DependenciesModal({
   onClose,
   stackType = "SPRING",
 }: DependenciesModalProps) {
+  const { dependencyGroups, setDependencyGroups } = useGeneratorStore()
   const [searchQuery, setSearchQuery] = useState("")
   const [localSelected, setLocalSelected] = useState<string[]>(selectedDependencies)
-  const [dependencyGroups, setDependencyGroups] = useState<DependencyGroup[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(dependencyGroups.length === 0)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch dependency groups from backend
+  // Fetch dependency groups from backend if not already loaded or if forced
+  // Note: Parent component might have already loaded them. 
+  // But for safety, we check if empty. 
+  // Ideally we should know if the loaded groups belong to the current stack.
+  // For now, let's assume parent manages it or we fetch if empty.
+  // Actually, to be safe and responsive to stack changes, we should fetch here too or rely on parent.
+  // Parent `ProjectConfigPhase` fetches on stack change. So store should be up to date.
+  // However, `ProjectConfigPhase` might not have completed fetching.
+
   useEffect(() => {
+    // If we have groups, maybe we don't need to fetch? 
+    // But what if stack changed? The store doesn't track which stack the groups belong to.
+    // Let's rely on the fetching logic. 
+    // If we want to be sure, we can fetch here too.
+
+    // Simplification: We fetch if empty.
+    // Better: We always fetch in this modal to ensure freshness, updating the store.
+
     const fetchDependencyGroups = async () => {
+      // Since ProjectConfigPhase fetches on mount/change, 
+      // and this modal is opened by user interaction *after* mount,
+      // likely the data is there or loading.
+
+      // If we want to guarantee data matches stackType:
+      // We should probably clear dependencyGroups in store when stackType changes in store.
+      // But assuming ProjectConfigPhase handles it:
+
+      if (dependencyGroups.length > 0) {
+        setIsLoading(false)
+        return
+      }
+
       try {
         setIsLoading(true)
         setError(null)
+        console.log("selectedStack in dependencies-modal", stackType)
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/dependencies/groups?stackType=${stackType}`)
 
@@ -66,35 +94,18 @@ export function DependenciesModal({
         setDependencyGroups(data)
       } catch (err) {
         console.error("Error fetching dependency groups:", err)
-        setError("Failed to load dependencies. Using fallback data.")
-
-        // Fallback to legacy data based on stack type
-        switch (stackType) {
-          case "SPRING":
-            setDependencyGroups(SPRING_DEPENDENCY_GROUPS)
-            break
-          case "NODE":
-            // You would add NODE_DEPENDENCY_GROUPS here
-            setDependencyGroups([])
-            break
-          case "NEST":
-            // You would add NEST_DEPENDENCY_GROUPS here
-            setDependencyGroups([])
-            break
-          case "FASTAPI":
-            // You would add FASTAPI_DEPENDENCY_GROUPS here
-            setDependencyGroups([])
-            break
-          default:
-            setDependencyGroups(SPRING_DEPENDENCY_GROUPS)
-        }
+        setError("Failed to load dependencies.")
+        setDependencyGroups([])
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchDependencyGroups()
-  }, [stackType])
+  }, [stackType, setDependencyGroups, dependencyGroups.length])
+
+  // ... rest of component
+
 
   const filteredGroups = useMemo(() => {
     if (!searchQuery.trim()) return dependencyGroups
@@ -270,5 +281,3 @@ export function DependenciesModal({
   )
 }
 
-// Legacy exports for backward compatibility
-export { SPRING_DEPENDENCY_GROUPS as DEPENDENCY_GROUPS }

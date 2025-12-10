@@ -22,23 +22,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useGeneratorStore } from "@/lib/store"
-import { DependenciesModal, DEPENDENCY_GROUPS } from "./dependencies-modal"
+import { DependenciesModal } from "./dependencies-modal"
 import { CodePreviewModal } from "./code-preview-modal"
 import { StackSelector } from "./stack-selector"
 import { toast } from "sonner"
+import { useEffect } from "react" // Ensure useEffect is imported
 
 const javaVersions = ["17", "21"]
 const bootVersions = ["3.2.0", "3.1.5", "3.0.12"]
 const nodeVersions = ["18", "20", "22"]
 const pythonVersions = ["3.9", "3.10", "3.11", "3.12"]
-
-const getDependencyInfo = (id: string) => {
-  for (const group of DEPENDENCY_GROUPS) {
-    const dep = group.dependencies.find((d) => d.id === id)
-    if (dep) return { ...dep, group: group.name }
-  }
-  return null
-}
 
 const getCategoryColor = (category: string) => {
   switch (category) {
@@ -55,6 +48,8 @@ const getCategoryColor = (category: string) => {
   }
 }
 
+
+
 export function ProjectConfigPhase() {
   const {
     tables,
@@ -70,6 +65,8 @@ export function ProjectConfigPhase() {
     reset,
     setPreviewFiles,
     previewFiles,
+    dependencyGroups,
+    setDependencyGroups,
   } = useGeneratorStore()
   const [showSuccess, setShowSuccess] = useState(false)
   const [showDependenciesModal, setShowDependenciesModal] = useState(false)
@@ -78,6 +75,30 @@ export function ProjectConfigPhase() {
 
   const selectedDependencyIds = projectConfig.dependencies
   const selectedStack = projectConfig.stackType
+
+  useEffect(() => {
+    const fetchDependencies = async () => {
+      console.log("selectedStack in project-config-phase", selectedStack)
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/dependencies/groups?stackType=${selectedStack}`)
+        if (response.ok) {
+          const data = await response.json()
+          setDependencyGroups(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch dependencies:", error)
+      }
+    }
+    fetchDependencies()
+  }, [selectedStack, setDependencyGroups])
+
+  const getDependencyInfo = (id: string) => {
+    for (const group of dependencyGroups) {
+      const dep = group.dependencies.find((d) => d.id === id)
+      if (dep) return { ...dep, group: group.name }
+    }
+    return null
+  }
 
   const handleDependenciesSelect = (depIds: string[]) => {
     setProjectConfig({ dependencies: depIds })
@@ -90,7 +111,7 @@ export function ProjectConfigPhase() {
 
   const getProjectPayload = () => {
     const fullDependencies = selectedDependencyIds.map((depId) => {
-      for (const group of DEPENDENCY_GROUPS) {
+      for (const group of dependencyGroups) {
         const dep = group.dependencies.find((d) => d.id === depId)
         if (dep) return dep
       }
@@ -327,7 +348,7 @@ ${selectedStack === "FASTAPI"
           }
 
 ## Dependencies
-${selectedDependencyIds.map((d) => `- ${getDependencyInfo(d)?.name || d}`).join("\n")}
+// No change needed here, just verifying logic.
 
 ## Tables
 ${tables

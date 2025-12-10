@@ -14,6 +14,7 @@ import debounce from "lodash/debounce"
 interface AiGenerateModalProps {
   onClose: () => void
   conversationMode?: boolean
+  onGenerateComplete?: () => void
 }
 
 interface AIResponse {
@@ -43,6 +44,14 @@ const LAYOUT_CONFIG = {
   LEVEL_GAP_Y: 500,    // Vertical spacing between levels
   TABLE_GAP_X: 650,    // Horizontal spacing between tables in same level
 }
+
+const EXAMPLE_PROMPTS = [
+  "Create a simple blog schema with users, posts, and comments",
+  "Design an e-commerce database with products, categories, orders, and reviews",
+  "Add a 'status' column to the orders table",
+  "Delete the temporary_logs table",
+  "Create a school management system with students, teachers, classes, and grades"
+]
 
 // ---------- Helper utilities ----------
 const now = () => Date.now()
@@ -347,7 +356,7 @@ const aiGenerateSchema = async (
 }
 
 // ---------- Component ----------
-export function AiGenerateModal({ onClose, conversationMode = false }: AiGenerateModalProps) {
+export function AiGenerateModal({ onClose, conversationMode = false, onGenerateComplete }: AiGenerateModalProps) {
   const [prompt, setPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -614,6 +623,9 @@ export function AiGenerateModal({ onClose, conversationMode = false }: AiGenerat
       if (conversationMode) {
         setPrompt("")
       } else {
+        if (onGenerateComplete) {
+          onGenerateComplete()
+        }
         onClose()
       }
 

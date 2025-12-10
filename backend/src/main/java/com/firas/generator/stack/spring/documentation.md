@@ -55,6 +55,9 @@ Maps SQL types to Java types:
 
 Wraps `DependencyRegistry` which fetches dependencies from `start.spring.io`.
 
+**API Exposure**:
+These dependencies are exposed via the `/api/dependencies/groups?stackType=SPRING` endpoint, which the frontend consumes directly to populate the dependency selection modal. This ensures the frontend always has the latest valid dependencies without relying on hardcoded mock data.
+
 ## SpringConfig
 
 **Location**: `com.firas.generator.model.config.SpringConfig`

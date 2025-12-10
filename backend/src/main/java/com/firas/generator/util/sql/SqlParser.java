@@ -1,11 +1,10 @@
-package com.firas.generator.util;
+package com.firas.generator.util.sql;
 
 import com.firas.generator.model.*;
+import com.firas.generator.util.sql.implementation.MysqlConnection;
+import com.firas.generator.util.sql.implementation.PostgresqlConnection;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.sql.*;
 import java.util.*;
 
@@ -13,39 +12,15 @@ import java.util.*;
 public class SqlParser {
 
     public List<Table> parseSql(String sql) throws SQLException {
-        String dbName = System.getenv("DB_NAME");
-        String user = System.getenv("DB_USER");
-        String pass = System.getenv("DB_PASSWORD");
-        String host = System.getenv("DB_HOST");
-
-
-        // First connection URL (without database name for DROP/CREATE operations)
-
-        String baseUrl="jdbc:mysql://"+host+dbName+ "?useSSL=true&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-
-        // 1. Drop and recreate the database
-        try (Connection rootConn = DriverManager.getConnection(baseUrl, user, pass)) {
-            rootConn.prepareStatement("DROP DATABASE IF EXISTS " + dbName).execute();
-            rootConn.prepareStatement("CREATE DATABASE " + dbName).execute();
-        }
-
-        // 2. Connect to the freshly created database
-        String url = baseUrl + dbName + "?useSSL=false&serverTimezone=UTC";
-        try (Connection conn = DriverManager.getConnection(url, user, pass)) {
-
-            // 3. Execute the SQL dump
-            for (String stmt : sql.split(";")) {
-                if (!stmt.trim().isEmpty()) {
-                    conn.prepareStatement(stmt).execute();
-                }
-            }
-
-            // 4. Parse metadata using your existing method
-            List<Table> tables = loadMetadata(conn);
-            System.out.println(tables);
-            return tables;
-        }
+        return parseSql(sql, "mysql");
     }
+
+    public List<Table> parseSql(String sql, String dialect) throws SQLException {
+        SqlConnection conn = SqlConnectionFactory.get(dialect);
+        return loadMetadata(conn.getConnection(sql));
+    }
+
+
 
 
 

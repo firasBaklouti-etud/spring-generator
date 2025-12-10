@@ -1,8 +1,8 @@
 package com.firas.generator.util;
 
 import com.firas.generator.model.Column;
-import com.firas.generator.model.Relationship;
 import com.firas.generator.model.Table;
+import com.firas.generator.util.sql.SqlParser;
 import org.junit.Test;
 
 import java.nio.file.*;

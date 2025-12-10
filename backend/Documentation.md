@@ -231,21 +231,49 @@ classDiagram
 
 ### SQL Parser (`core/parser/`)
 
-The [SqlParser](file:///c:/Users/firas/Desktop/9raya/java/springInitializer/backend/src/main/java/com/firas/generator/util/SqlParser.java#12-344) remains **completely stack-agnostic**. It parses SQL into [Table](file:///c:/Users/firas/Desktop/9raya/java/springInitializer/backend/src/main/java/com/firas/generator/model/Table.java#17-61)/[Column](file:///c:/Users/firas/Desktop/9raya/java/springInitializer/backend/src/main/java/com/firas/generator/model/Column.java#14-135)/[Relationship](file:///c:/Users/firas/Desktop/9raya/java/springInitializer/backend/src/main/java/com/firas/generator/model/Table.java#31-34) objects:
+The SQL Parser has been refactored to support **multiple database dialects** using the **Factory Pattern**.
 
-```java
-// SqlParser outputs stack-agnostic data
-List<Table> tables = sqlParser.parseSql(sql);
+**Location**: `com.firas.generator.util.sql`
 
-// TypeMapper converts to stack-specific types
-for (Column col : table.getColumns()) {
-    col.setLanguageType(typeMapper.mapSqlType(col.getType()));
-}
+**Architecture**:
+```mermaid
+classDiagram
+    class SqlParser {
+        +parseSql(sql, dialect)
+    }
+    class SqlConnectionFactory {
+        +get(dialect)
+    }
+    class SqlConnection {
+        <<interface>>
+        +getConnection(sql)
+    }
+    class MysqlConnection
+    class PostgresqlConnection
+
+    SqlParser --> SqlConnectionFactory
+    SqlConnectionFactory --> SqlConnection
+    MysqlConnection ..|> SqlConnection
+    PostgresqlConnection ..|> SqlConnection
 ```
 
-**Current Issue**: `SqlParser.mapJavaType()` hardcodes Java types.
+**Workflow**:
+1. `SqlParserController` receives SQL and `dialect` (default: "mysql").
+2. `SqlParser` calls `SqlConnectionFactory.get(dialect)` to obtain the correct `SqlConnection` implementation.
+3. The specific implementation (e.g., `MysqlConnection`) creates an in-memory database connection (H2) customized for that dialect.
+4. `SqlParser.loadMetadata()` extracts table structure standard JDBC metadata, which remains generic.
 
-**Solution**: Extract type mapping to `TypeMapper` interface. SqlParser only stores SQL type.
+**Supported Dialects**:
+- **MySQL** (`MysqlConnection`)
+- **PostgreSQL** (`PostgresqlConnection`)
+
+**Code Example**:
+```java
+// Controller usage
+public List<Table> parseSql(String sql, String dialect) throws SQLException {
+    return sqlParser.parseSql(sql, dialect);
+}
+```
 
 ---
 

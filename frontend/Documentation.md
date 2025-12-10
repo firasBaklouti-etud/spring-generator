@@ -171,12 +171,12 @@ npm run type-check   # TypeScript type checking
 
 ### 4. **Generator Wizard (Main Feature)**
 
-#### **Phase 1: SQL Parser**
-- SQL code editor with syntax highlighting
-- Sample SQL loader
-- Backend API integration with fallback
-- Error handling and validation
-- Supports: `CREATE TABLE`, `ALTER TABLE`, `FOREIGN KEY`
+#### **Phase 1: Database Selection & SQL Parser**
+- **Database Selection**: Interactive dialog to choose between MySQL, PostgreSQL, etc.
+- **SQL Parsing**: Input SQL or use AI to generate tables.
+- **SQL Editor**: Code editor with syntax highlighting and error handling.
+- **Backend Integration**: Real-time parsing with support for multiple dialects.
+- **AI Integration**: Generate schema from natural language prompts.
 
 #### **Phase 2: Visual Schema Editor**
 - React Flow-based ER diagram
@@ -197,7 +197,9 @@ npm run type-check   # TypeScript type checking
   - Node/Nest: Node Version, Package Manager, ORM choice
   - FastAPI: Python Version, Package Manager, Async support
   - Common: Name, Description, Package Name
-- Dependencies modal:
+- **Dynamic Dependencies**:
+  - Fetches real dependency data from backend (`/api/dependencies/groups`)
+  - No mock data used
   - Categorized by groups (Web, Security, SQL, NoSQL, etc.)
   - Search functionality
   - Visual category badges

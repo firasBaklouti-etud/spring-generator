@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation" // Import usePathname
 import { motion, AnimatePresence } from "framer-motion"
 import { Menu, X, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ const navLinks = [
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const pathname = usePathname() // Get current path
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -22,14 +24,16 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
+  // Check if we're on the generator page
+  const isGeneratorPage = pathname === "/generator"
+
   return (
     <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "glass-strong shadow-lg" : "bg-transparent"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "glass-strong shadow-lg" : "bg-transparent"
+        }`}
     >
       <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
@@ -60,12 +64,15 @@ export function Navbar() {
             ))}
           </div>
 
+          {/* Only show the button if NOT on the generator page */}
           <div className="hidden md:flex items-center gap-4">
-            <Link href="/generator">
-              <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity glow-sm">
-                Start Generating
-              </Button>
-            </Link>
+            {!isGeneratorPage && (
+              <Link href="/generator">
+                <Button className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 transition-opacity glow-sm">
+                  Start Generating
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -95,11 +102,14 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
-              <Link href="/generator" onClick={() => setIsOpen(false)}>
-                <Button className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground">
-                  Start Generating
-                </Button>
-              </Link>
+              {/* Only show the button in mobile menu if NOT on the generator page */}
+              {!isGeneratorPage && (
+                <Link href="/generator" onClick={() => setIsOpen(false)}>
+                  <Button className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground">
+                    Start Generating
+                  </Button>
+                </Link>
+              )}
             </div>
           </motion.div>
         )}

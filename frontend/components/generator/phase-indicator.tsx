@@ -14,10 +14,7 @@ export function PhaseIndicator() {
   const { currentPhase, setCurrentPhase, tables } = useGeneratorStore()
 
   const canNavigateTo = (phaseId: number) => {
-    if (phaseId === 1) return true
-    if (phaseId === 2) return tables.length > 0
-    if (phaseId === 3) return tables.length > 0
-    return false
+    return true
   }
 
   return (
@@ -35,15 +32,14 @@ export function PhaseIndicator() {
                   <button
                     onClick={() => canClick && setCurrentPhase(phase.id)}
                     disabled={!canClick}
-                    className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl transition-all ${
-                      isActive
+                    className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl transition-all ${isActive
                         ? "bg-gradient-to-r from-primary to-accent text-primary-foreground glow-sm"
                         : isCompleted
                           ? "bg-primary/20 text-primary"
                           : canClick
                             ? "glass text-muted-foreground hover:text-foreground"
                             : "glass text-muted-foreground/50 cursor-not-allowed"
-                    }`}
+                      }`}
                   >
                     <div className="relative">
                       {isCompleted ? (
@@ -60,9 +56,8 @@ export function PhaseIndicator() {
 
                   {index < phases.length - 1 && (
                     <div
-                      className={`w-8 sm:w-12 h-0.5 mx-1 sm:mx-2 rounded-full ${
-                        currentPhase > phase.id ? "bg-gradient-to-r from-primary to-accent" : "bg-border"
-                      }`}
+                      className={`w-8 sm:w-12 h-0.5 mx-1 sm:mx-2 rounded-full ${currentPhase > phase.id ? "bg-gradient-to-r from-primary to-accent" : "bg-border"
+                        }`}
                     />
                   )}
                 </div>

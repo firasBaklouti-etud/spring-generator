@@ -65,9 +65,7 @@ export interface Column {
   length?: number
 }
 
-export interface RelationshipType {
-  type: "ONE_TO_ONE" | "ONE_TO_MANY" | "MANY_TO_ONE" | "MANY_TO_MANY"
-}
+export type RelationshipType = "ONE_TO_ONE" | "ONE_TO_MANY" | "MANY_TO_ONE" | "MANY_TO_MANY"
 
 export interface Relationship {
   type: RelationshipType
@@ -143,6 +141,10 @@ interface GeneratorStore {
   currentPhase: number
   setCurrentPhase: (phase: number) => void
 
+  // SQL Dialect
+  sqlDialect: string
+  setSqlDialect: (dialect: string) => void
+
   // SQL input
   sqlInput: string
   setSqlInput: (sql: string) => void
@@ -179,6 +181,10 @@ interface GeneratorStore {
   setIsParsing: (loading: boolean) => void
   isGenerating: boolean
   setIsGenerating: (loading: boolean) => void
+
+  // Dependencies
+  dependencyGroups: DependencyGroup[]
+  setDependencyGroups: (groups: DependencyGroup[]) => void
 
   // Reset
   reset: () => void
@@ -237,6 +243,9 @@ const defaultProjectConfig: ProjectConfig = {
 export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
   currentPhase: 1,
   setCurrentPhase: (phase) => set({ currentPhase: phase }),
+
+  sqlDialect: "mysql",
+  setSqlDialect: (dialect) => set({ sqlDialect: dialect }),
 
   sqlInput: "",
   setSqlInput: (sql) => set({ sqlInput: sql }),
@@ -336,9 +345,13 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
   isGenerating: false,
   setIsGenerating: (loading) => set({ isGenerating: loading }),
 
+  dependencyGroups: [],
+  setDependencyGroups: (groups) => set({ dependencyGroups: groups }),
+
   reset: () =>
     set({
       currentPhase: 1,
+      sqlDialect: "mysql",
       sqlInput: "",
       tables: [],
       history: [],
@@ -347,5 +360,6 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
       previewFiles: [],
       isParsing: false,
       isGenerating: false,
+      dependencyGroups: [],
     }),
 }))

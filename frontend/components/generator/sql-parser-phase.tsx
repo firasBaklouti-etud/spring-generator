@@ -1,11 +1,11 @@
-"use client"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Play, Sparkles, FileCode2, AlertCircle, Loader2 } from "lucide-react"
+import { Play, Sparkles, FileCode2, AlertCircle, Loader2, Database } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useGeneratorStore, type Table } from "@/lib/store"
+import { DatabaseSelectionDialog } from "./database-selection-dialog"
+
 
 const sampleSQL = `CREATE TABLE users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -48,34 +48,47 @@ function parseSQL(sql: string): Table[] {
                     name: "id",
                     fieldName: "id",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     primaryKey: true,
                     autoIncrement: true,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false
                 },
                 {
                     name: "username",
                     fieldName: "username",
                     javaType: "String",
-                    sqlType: "VARCHAR",
+                    type: "VARCHAR",
                     length: 100,
                     nullable: false,
                     unique: true,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "email",
                     fieldName: "email",
                     javaType: "String",
-                    sqlType: "VARCHAR",
+                    type: "VARCHAR",
                     length: 255,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "created_at",
                     fieldName: "createdAt",
                     javaType: "LocalDateTime",
-                    sqlType: "TIMESTAMP",
+                    type: "TIMESTAMP",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
             ],
             relationships: [
@@ -87,6 +100,7 @@ function parseSQL(sql: string): Table[] {
                 },
             ],
             position: { x: 100, y: 100 },
+            isJoinTable: false
         },
         {
             id: "2",
@@ -97,32 +111,46 @@ function parseSQL(sql: string): Table[] {
                     name: "order_id",
                     fieldName: "orderId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     primaryKey: true,
                     autoIncrement: true,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false
                 },
                 {
                     name: "user_id",
                     fieldName: "userId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "total_amount",
                     fieldName: "totalAmount",
                     javaType: "BigDecimal",
-                    sqlType: "DECIMAL",
+                    type: "DECIMAL",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "status",
                     fieldName: "status",
                     javaType: "String",
-                    sqlType: "VARCHAR",
+                    type: "VARCHAR",
                     length: 50,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
             ],
             relationships: [
@@ -140,6 +168,7 @@ function parseSQL(sql: string): Table[] {
                 },
             ],
             position: { x: 400, y: 100 },
+            isJoinTable: false
         },
         {
             id: "3",
@@ -150,32 +179,46 @@ function parseSQL(sql: string): Table[] {
                     name: "product_id",
                     fieldName: "productId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     primaryKey: true,
                     autoIncrement: true,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false
                 },
                 {
                     name: "name",
                     fieldName: "name",
                     javaType: "String",
-                    sqlType: "VARCHAR",
+                    type: "VARCHAR",
                     length: 200,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "price",
                     fieldName: "price",
                     javaType: "BigDecimal",
-                    sqlType: "DECIMAL",
+                    type: "DECIMAL",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "stock_quantity",
                     fieldName: "stockQuantity",
                     javaType: "Integer",
-                    sqlType: "INT",
+                    type: "INT",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
             ],
             relationships: [
@@ -187,6 +230,7 @@ function parseSQL(sql: string): Table[] {
                 },
             ],
             position: { x: 100, y: 300 },
+            isJoinTable: false
         },
         {
             id: "4",
@@ -197,38 +241,56 @@ function parseSQL(sql: string): Table[] {
                     name: "order_item_id",
                     fieldName: "orderItemId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     primaryKey: true,
                     autoIncrement: true,
                     nullable: false,
+                    unique: false,
+                    foreignKey: false
                 },
                 {
                     name: "order_id",
                     fieldName: "orderId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "product_id",
                     fieldName: "productId",
                     javaType: "Long",
-                    sqlType: "BIGINT",
+                    type: "BIGINT",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "quantity",
                     fieldName: "quantity",
                     javaType: "Integer",
-                    sqlType: "INT",
+                    type: "INT",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
                 {
                     name: "unit_price",
                     fieldName: "unitPrice",
                     javaType: "BigDecimal",
-                    sqlType: "DECIMAL",
+                    type: "DECIMAL",
                     nullable: false,
+                    unique: false,
+                    foreignKey: false,
+                    autoIncrement: false,
+                    primaryKey: false
                 },
             ],
             relationships: [
@@ -246,6 +308,7 @@ function parseSQL(sql: string): Table[] {
                 },
             ],
             position: { x: 400, y: 300 },
+            isJoinTable: false
         },
     ]
 }
@@ -259,11 +322,37 @@ function toPascalCase(str: string): string {
     return camel.charAt(0).toUpperCase() + camel.slice(1)
 }
 
+import { AiGenerateModal } from "./ai-generate-modal"
+
+// ... imports and logic ...
+
 export function SqlParserPhase() {
-    const { sqlInput, setSqlInput, setTables, setCurrentPhase, isParsing, setIsParsing } = useGeneratorStore()
+    const { sqlInput, setSqlInput, setTables, setCurrentPhase, isParsing, setIsParsing, sqlDialect } = useGeneratorStore()
     const [error, setError] = useState<string | null>(null)
+    const [showDbDialog, setShowDbDialog] = useState(false)
+    const [showAiModal, setShowAiModal] = useState(false)
+    const [hasOpenedDialog, setHasOpenedDialog] = useState(false)
+
+    useEffect(() => {
+        // Auto-open database selection on first mount if not generic default
+        // Actually, user wants it to appear automatically first time /generator page opened.
+        // We can use a session check logic or just a simple state check
+        if (!hasOpenedDialog) {
+            setShowDbDialog(true)
+            setHasOpenedDialog(true)
+        }
+    }, [])
 
     const handleParse = async () => {
+        // Allow proceeding without SQL input if user wants to skip
+        // But if they clicked Parse, they probably intended to parse.
+        // However, user said "make SQL Parser and Schema Editor buttons always accessible"
+        // For now, if empty, we just warn, but since we removed the "Skip" button, maybe the "Parse" button should handle empty?
+        // Wait, removing "Skip to Editor" button means we need another way to skip.
+        // The user said "no i dont want a skip to editor buttom / instead just make SQL Parser and Schema Editor and Generate buttoms always accessible"
+        // This implies the navigation bar should allow clicking. I'll handle that in a separate file (phase-indicator.tsx) later.
+        // For now, Parse button remains strict about input.
+
         if (!sqlInput.trim()) {
             toast.error("Please enter SQL statements")
             return
@@ -275,7 +364,7 @@ export function SqlParserPhase() {
         try {
             // Try API first
             const encodedSql = encodeURIComponent(sqlInput)
-            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/sqlParser/${encodedSql}`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/sqlParser/${encodedSql}?dialect=${sqlDialect}`, {
                 method: "GET",
                 signal: AbortSignal.timeout(5000),
             })
@@ -315,6 +404,10 @@ export function SqlParserPhase() {
         }
     }
 
+    const handleAiComplete = () => {
+        setCurrentPhase(2)
+    }
+
     const loadSample = () => {
         setSqlInput(sampleSQL)
         toast.info("Sample SQL loaded")
@@ -330,7 +423,7 @@ export function SqlParserPhase() {
                     </div>
                     <h1 className="text-2xl sm:text-3xl font-bold mb-2">Parse Your SQL</h1>
                     <p className="text-muted-foreground">
-                        Paste your CREATE TABLE statements below and we'll transform them into a visual schema
+                        Paste your CREATE TABLE statements below or use AI to generate your schema
                     </p>
                 </motion.div>
 
@@ -349,10 +442,29 @@ export function SqlParserPhase() {
                             <div className="w-3 h-3 rounded-full bg-chart-3/50" />
                         </div>
                         <span className="text-xs text-muted-foreground font-mono">SQL Editor</span>
-                        <Button variant="ghost" size="sm" onClick={loadSample} className="text-xs">
-                            <Sparkles className="w-3 h-3 mr-1" />
-                            Load Sample
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowDbDialog(true)}
+                                className="text-xs h-7 gap-1 border-dashed"
+                            >
+                                <Database className="w-3 h-3" />
+                                {sqlDialect === "mysql" ? "MySQL" :
+                                    sqlDialect === "postgresql" ? "PostgreSQL" :
+                                        sqlDialect === "mariadb" ? "MariaDB" :
+                                            sqlDialect === "sqlite" ? "SQLite" :
+                                                sqlDialect === "sqlserver" ? "SQL Server" : sqlDialect}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setShowAiModal(true)} className="text-xs h-7">
+                                <Sparkles className="w-3 h-3 mr-1" />
+                                AI Generate
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={loadSample} className="text-xs h-7">
+                                <Sparkles className="w-3 h-3 mr-1" />
+                                Load Sample
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Code Area */}
@@ -388,12 +500,12 @@ CREATE TABLE users (
                     </motion.div>
                 )}
 
-                {/* Parse Button */}
+                {/* Actions */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="flex justify-center"
+                    className="flex justify-center gap-4"
                 >
                     <Button
                         onClick={handleParse}
@@ -431,6 +543,19 @@ CREATE TABLE users (
                     </ul>
                 </motion.div>
             </div>
-        </div>
+
+            <DatabaseSelectionDialog
+                open={showDbDialog}
+                onOpenChange={setShowDbDialog}
+                onContinue={() => setShowDbDialog(false)}
+            />
+
+            {showAiModal && (
+                <AiGenerateModal
+                    onClose={() => setShowAiModal(false)}
+                    onGenerateComplete={handleAiComplete}
+                />
+            )}
+        </div >
     )
 }

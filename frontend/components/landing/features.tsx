@@ -7,12 +7,12 @@ const features = [
   {
     icon: Database,
     title: "SQL Parsing",
-    description: "Paste your CREATE TABLE statements and watch them transform into structured data models instantly.",
+    description: "Paste your MySQL or PostgreSQL CREATE TABLE statements and watch them transform into structured data models.",
   },
   {
     icon: Workflow,
     title: "Visual Schema Editor",
-    description: "Drag, drop, and connect tables on an infinite canvas. Edit relationships with intuitive controls.",
+    description: "Drag, drop, and connect tables on an infinite canvas. Edit relationships (1..N) with intuitive controls.",
   },
   {
     icon: Sparkles,
@@ -21,8 +21,8 @@ const features = [
   },
   {
     icon: Layers,
-    title: "Full Stack Output",
-    description: "Generate entities, repositories, services, and controllers with proper JPA annotations.",
+    title: "Multi-Stack Support",
+    description: "Generate backends for Spring Boot, Node.js, NestJS, and FastAPI with proper conventions.",
   },
   {
     icon: Shield,

@@ -22,11 +22,15 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useGeneratorStore, type Table, type Relationship } from "@/lib/store"
 import { TableNode } from "./table-node"
-import { TableEditor } from "./table-editor"
+import { RelationshipEdge } from "./relationship-edge"
 import { AiGenerateModal } from "./ai-generate-modal"
 
 const nodeTypes = {
   tableNode: TableNode,
+}
+
+const edgeTypes = {
+  relationshipEdge: RelationshipEdge
 }
 
 export function SchemaEditorPhase() {
@@ -73,13 +77,22 @@ export function SchemaEditorPhase() {
           // Determine source and target based on relationship type
           let sourceId = table.id
           let targetId = targetTable.id
-          let label = relType?.replace("_", " ") || "RELATION"
+
+          let sourceLabel = "1"
+          let targetLabel = "N"
 
           // For MANY_TO_ONE, reverse the direction for visual clarity
           if (relType === "MANY_TO_ONE") {
             sourceId = targetTable.id
             targetId = table.id
-            label = "ONE TO MANY" // Show as ONE_TO_MANY from the parent side
+            sourceLabel = "1"
+            targetLabel = "N"
+          } else if (relType === "ONE_TO_ONE") {
+            sourceLabel = "1"
+            targetLabel = "1"
+          } else if (relType === "MANY_TO_MANY") {
+            sourceLabel = "N"
+            targetLabel = "N"
           }
 
           const finalEdgeId = `${sourceId}-${targetId}-${rel.fieldName}`
@@ -88,7 +101,8 @@ export function SchemaEditorPhase() {
             id: finalEdgeId,
             source: sourceId,
             target: targetId,
-            type: "smoothstep",
+            type: "relationshipEdge",
+            data: { sourceLabel, targetLabel },
             animated: true,
             style: {
               stroke: "oklch(0.7 0.18 200)",
@@ -99,18 +113,6 @@ export function SchemaEditorPhase() {
               type: MarkerType.ArrowClosed,
               color: "oklch(0.7 0.18 200)",
             },
-            label,
-            labelStyle: {
-              fill: "oklch(0.95 0 0)",
-              fontSize: 10,
-              fontWeight: 500,
-            },
-            labelBgStyle: {
-              fill: "oklch(0.12 0.01 260)",
-              fillOpacity: 0.9,
-            },
-            labelBgPadding: [4, 4] as [number, number],
-            labelBgBorderRadius: 4,
           })
           addedEdges.add(finalEdgeId)
         }
@@ -140,25 +142,14 @@ export function SchemaEditorPhase() {
                 id: edgeId,
                 source: referencedTable.id,
                 target: table.id,
-                type: "smoothstep",
+                type: "relationshipEdge",
+                data: { sourceLabel: "1", targetLabel: "N" },
                 animated: true,
                 style: { stroke: "oklch(0.65 0.15 50)", strokeWidth: 2 },
                 markerEnd: {
                   type: MarkerType.ArrowClosed,
                   color: "oklch(0.65 0.15 50)",
-                },
-                label: "ONE TO MANY",
-                labelStyle: {
-                  fill: "oklch(0.95 0 0)",
-                  fontSize: 10,
-                  fontWeight: 500,
-                },
-                labelBgStyle: {
-                  fill: "oklch(0.12 0.01 260)",
-                  fillOpacity: 0.9,
-                },
-                labelBgPadding: [4, 4] as [number, number],
-                labelBgBorderRadius: 4,
+                }
               })
               addedEdges.add(edgeId)
             }
@@ -219,7 +210,8 @@ export function SchemaEditorPhase() {
         addEdge(
           {
             ...params,
-            type: "smoothstep",
+            type: "relationshipEdge",
+            data: { sourceLabel: "1", targetLabel: "N" },
             animated: true,
             style: { stroke: "oklch(0.7 0.18 200)", strokeWidth: 2 },
             markerEnd: {
@@ -336,6 +328,7 @@ export function SchemaEditorPhase() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           snapToGrid
           snapGrid={[20, 20]}
