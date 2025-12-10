@@ -1,98 +1,130 @@
-# Spring Stack Provider Documentation
+# Spring Stack Provider - Implementation Details
 
-This document describes the **Spring Boot** implementation of the [Multi-Stack Architecture](../../Documentation.md). It serves as the reference implementation for the `StackProvider` interface.
+This document details the **Spring Boot** implementation of the generator. It is the reference implementation for the `StackProvider` system.
 
-## Overview
+## 📝 Configuration Fields (`SpringConfig`)
 
-The Spring Stack Provider generates complete Spring Boot projects with:
-- Maven build configuration (`pom.xml`)
-- Main Application class
-- JPA Entities with relationships
-- Spring Data JPA Repositories
-- Service layer classes
-- REST Controllers
-- Application properties
+When `stackType` is set to `SPRING`, the `springConfig` object in the request payload controls generation.
 
-## Components
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `groupId` | String | `com.example` | Maven Group ID (e.g., organization name) |
+| `artifactId` | String | `demo` | Maven Artifact ID (project ID) |
+| `javaVersion` | String | `17` | Java SDK version (e.g., "17", "21") |
+| `bootVersion` | String | `3.2.0` | Spring Boot framework version |
+| `buildTool` | String | `maven` | Build system ("maven" or "gradle") |
+| `packaging` | String | `jar` | Packaging type ("jar" or "war") |
 
-### SpringStackProvider
-**Location**: `com.firas.generator.stack.spring.SpringStackProvider`
-
-Main entry point for Spring project generation. Implements `StackProvider` interface.
-
-**Key Methods**:
-- `generateProject(ProjectRequest)` - Returns `List<FilePreview>` for IDE preview
-- `generateProjectZip(ProjectRequest)` - Returns ZIP byte array
-
-### SpringCodeGenerator
-**Location**: `com.firas.generator.stack.spring.SpringCodeGenerator`
-
-Generates CRUD code files using FreeMarker templates.
-
-**Templates Used** (in `resources/templates/spring/`):
-- `Entity.ftl` - JPA entity with relationships
-- `Repository.ftl` - Spring Data JPA interface
-- `Service.ftl` - Business logic layer
-- `Controller.ftl` - REST endpoints
-
-### SpringTypeMapper
-**Location**: `com.firas.generator.stack.spring.SpringTypeMapper`
-
-Maps SQL types to Java types:
-
-| SQL Type | Java Type |
-|----------|-----------|
-| VARCHAR, TEXT | String |
-| INT, INTEGER | Integer |
-| BIGINT | Long |
-| DECIMAL, NUMERIC | BigDecimal |
-| BOOLEAN, BIT | Boolean |
-| DATE | LocalDate |
-| TIMESTAMP, DATETIME | LocalDateTime |
-
-### SpringDependencyProvider
-**Location**: `com.firas.generator.stack.spring.SpringDependencyProvider`
-
-Wraps `DependencyRegistry` which fetches dependencies from `start.spring.io`.
-
-**API Exposure**:
-These dependencies are exposed via the `/api/dependencies/groups?stackType=SPRING` endpoint, which the frontend consumes directly to populate the dependency selection modal. This ensures the frontend always has the latest valid dependencies without relying on hardcoded mock data.
-
-## SpringConfig
-
-**Location**: `com.firas.generator.model.config.SpringConfig`
-
-Spring-specific configuration fields:
-
-```java
-public class SpringConfig {
-    private String groupId = "com.example";
-    private String artifactId = "demo";
-    private String javaVersion = "17";
-    private String bootVersion = "3.2.0";
-    private String buildTool = "maven";
-    private String packaging = "jar";
+**Example Payload:**
+```json
+{
+  "stackType": "SPRING",
+  "springConfig": {
+    "groupId": "com.mycompany",
+    "artifactId": "myservice",
+    "javaVersion": "21",
+    "bootVersion": "3.2.2"
+  }
 }
 ```
 
-## Templates
+## 🏗️ Components Structure
 
-Templates are located in `resources/templates/spring/`:
+### 1. `SpringStackProvider`
+**File**: `com.firas.generator.stack.spring.SpringStackProvider`
 
-| Template | Output |
-|----------|--------|
-| `pom.xml.ftl` | Maven project configuration |
-| `Application.java.ftl` | Main Spring Boot class |
-| `application.properties.ftl` | Configuration properties |
-| `Entity.ftl` | JPA entity class |
-| `Repository.ftl` | Repository interface |
-| `Service.ftl` | Service class |
-| `Controller.ftl` | REST controller |
+The main orchestrator. It executes the following flow:
+1.  **Type Mapping**: Converts all SQL column types to Java types (e.g., `VARCHAR` -> `String`) using `SpringTypeMapper`.
+2.  **Structure Generation**:
+    *   Generates `pom.xml` (Maven build).
+    *   Generates `Application.java` (Main class).
+    *   Generates `application.properties`.
+3.  **CRUD Generation**:
+    *   Iterates over parsed tables.
+    *   Calls `SpringCodeGenerator` to create Entities, Repositories, etc.
 
-## Adding New Features
+### 2. `SpringCodeGenerator`
+**File**: `com.firas.generator.stack.spring.SpringCodeGenerator`
 
-To add new templates:
+Handles the actual content generation for code files using FreeMarker templates.
 
-1. Create `.ftl` file in `templates/spring/`
-2. Add generation method in `SpringCodeGenerator`
-3. Call from `SpringStackProvider.generateProject()`
+**Generated Files:**
+*   **Entity**: `@Entity`, `@Table`, relationships (`@OneToMany`, etc.), Lombok annotations.
+*   **Repository**: Extends `JpaRepository<Entity, ID>`.
+*   **Service**: `@Service` class with CRUD methods.
+*   **Controller**: `@RestController` with endpoints (`GET`, `POST`, `PUT`, `DELETE`).
+*   **DTO**: Data Transfer Object (if enabled).
+*   **Mapper**: MapStruct/ModelMapper interface (if enabled).
+
+### 3. `SpringTypeMapper`
+**File**: `com.firas.generator.stack.spring.SpringTypeMapper`
+
+Maps standard SQL types to Java types.
+
+| SQL Type | Java Type |
+| :--- | :--- |
+| `VARCHAR`, `TEXT`, `CHAR` | `String` |
+| `INT`, `INTEGER` | `Integer` |
+| `BIGINT` | `Long` |
+| `DOUBLE`, `FLOAT` | `Double` |
+| `DECIMAL` | `BigDecimal` |
+| `BOOLEAN`, `BIT` | `Boolean` |
+| `DATE` | `LocalDate` |
+| `TIMESTAMP`, `DATETIME` | `LocalDateTime` |
+
+### 4. `SpringDependencyProvider`
+**File**: `com.firas.generator.stack.spring.SpringDependencyProvider`
+
+Fetches real-time dependency data compatible with `start.spring.io`.
+*   **Endpoint**: `/api/dependencies/groups?stackType=SPRING`
+*   **Mechanism**: Wraps `DependencyRegistry` to return categorized groups (Web, SQL, Security, etc.).
+
+## 📂 Template System
+
+Templates are stored in `src/main/resources/templates/spring/`.
+
+| Template File | Purpose | Key Variables |
+| :--- | :--- | :--- |
+| `pom.xml.ftl` | Maven Configuration | `springConfig`, `dependencies` |
+| `Application.java.ftl` | Main Entry Point | `className`, `packageName` |
+| `application.properties.ftl` | App Config | `port`, `dbConfig` |
+| `Entity.ftl` | JPA Entity | `table`, `columns`, `relationships` |
+| `Repository.ftl` | Data Access | `entityName`, `idType` |
+| `Service.ftl` | Business Logic | `entityName`, `repositoryName` |
+| `Controller.ftl` | API Endpoints | `entityName`, `serviceName` |
+
+## 🔄 Generation Process Flow
+
+```mermaid
+sequenceDiagram
+    participant Requester
+    participant ValidatedRequest as Request
+    participant Provider as SpringStackProvider
+    participant Mapper as SpringTypeMapper
+    participant Gen as SpringCodeGenerator
+    participant Tmpl as TemplateService
+
+    Requester->>Provider: generateProject(request)
+    Provider->>Mapper: applyTypeMappings(tables)
+    
+    note right of Provider: 1. Generate Base Structure
+    Provider->>Tmpl: process("pom.xml.ftl")
+    Provider->>Tmpl: process("Application.java.ftl")
+    
+    note right of Provider: 2. Generate CRUD
+    loop For Each Table
+        Provider->>Gen: generateEntity(table)
+        Gen->>Tmpl: process("Entity.ftl")
+        
+        Provider->>Gen: generateRepository(table)
+        Gen->>Tmpl: process("Repository.ftl")
+        
+        Provider->>Gen: generateService(table)
+        Gen->>Tmpl: process("Service.ftl")
+        
+        Provider->>Gen: generateController(table)
+        Gen->>Tmpl: process("Controller.ftl")
+    end
+    
+    Provider-->>Requester: List<FilePreview>
+```
