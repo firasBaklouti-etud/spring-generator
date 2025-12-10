@@ -25,5 +25,5 @@ This project is a **Multi-Stack Project Generator** capable of generating Spring
 
 ## 🗺️ Quick Links
 
-*   [Backend Source Code](backend/src/main/java/com/firas/generator)
-*   [Frontend Source Code](frontend/app)
+*   [Backend Source Code](backend/Documentation.md)
+*   [Frontend Source Code](frontend/Documentation.md)
