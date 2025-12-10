@@ -151,6 +151,31 @@ frontend/
 | **Preview** | `POST` | `/api/generate/preview` | `ProjectRequest` |
 | **Generate** | `POST` | `/api/generate/project` | `ProjectRequest` |
 
+### Environment Configuration
+The frontend connects to the backend using the following environment variable:
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+```
+Usage in Frontend Code:
+```env
+// Example API call
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+const response = await fetch(`${backendUrl}/api/generate/preview`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(projectRequest),
+});
+```
+Deployment Considerations:
+
+For local development: http://localhost:8080
+
+For production: Update to your backend's public URL (e.g., https://api.yourdomain.com)
+
+The NEXT_PUBLIC_ prefix makes this variable accessible in the browser
+
+
 The `ProjectRequest` payload is dynamic. Example for Spring:
 ```json
 {
