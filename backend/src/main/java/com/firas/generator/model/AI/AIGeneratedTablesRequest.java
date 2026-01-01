@@ -17,6 +17,10 @@ public class AIGeneratedTablesRequest {
         this.allowDestructive = allowDestructive;
     }
 
+    public AIGeneratedTablesRequest() {
+
+    }
+
     public String getPrompt() {
         return prompt;
     }
