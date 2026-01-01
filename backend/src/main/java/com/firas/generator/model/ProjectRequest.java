@@ -1,9 +1,6 @@
 package com.firas.generator.model;
 
-import com.firas.generator.model.config.FastAPIConfig;
-import com.firas.generator.model.config.NestConfig;
-import com.firas.generator.model.config.NodeConfig;
-import com.firas.generator.model.config.SpringConfig;
+import com.firas.generator.model.config.*;
 import com.firas.generator.stack.StackType;
 
 import java.util.List;
@@ -82,6 +79,10 @@ public class ProjectRequest {
     
     /** FastAPI/Python specific configuration */
     private FastAPIConfig fastapiConfig;
+
+    /** Security configuration */
+    private SecurityConfig securityConfig;
+
     
     // ==================== Legacy Fields (Backward Compatibility) ====================
     // These fields are kept for backward compatibility with existing frontend
@@ -150,6 +151,10 @@ public class ProjectRequest {
     
     public FastAPIConfig getFastapiConfig() { return fastapiConfig; }
     public void setFastapiConfig(FastAPIConfig fastapiConfig) { this.fastapiConfig = fastapiConfig; }
+
+    public SecurityConfig getSecurityConfig() { return securityConfig; }
+    public void setSecurityConfig(SecurityConfig securityConfig) { this.securityConfig = securityConfig; }
+
     
     // ==================== Legacy Field Getters (Backward Compatibility) ====================
     

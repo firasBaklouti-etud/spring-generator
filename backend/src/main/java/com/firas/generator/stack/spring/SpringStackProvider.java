@@ -3,12 +3,13 @@ package com.firas.generator.stack.spring;
 import com.firas.generator.model.DependencyMetadata;
 import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.ProjectRequest;
+import com.firas.generator.model.RelationshipType;
 import com.firas.generator.model.Table;
 import com.firas.generator.model.config.SpringConfig;
 import com.firas.generator.service.TemplateService;
 import com.firas.generator.stack.*;
 import com.firas.generator.util.ZipUtils;
-import lombok.extern.slf4j.Slf4j;
+import java.io.File;
 import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Component;
 
@@ -19,21 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-/**
- * Stack provider for Spring Boot projects.
- * 
- * Generates complete Spring Boot projects with Maven, JPA entities,
- * Spring Data repositories, services, and REST controllers.
- * 
- * This provider encapsulates all Spring-specific generation logic,
- * delegating to SpringCodeGenerator for CRUD code and SpringTypeMapper
- * for type conversions.
- * 
- * @author Firas Baklouti
- * @version 1.0
- * @since 2025-12-07
- */
-@Slf4j
 @Component
 public class SpringStackProvider implements StackProvider {
     
@@ -91,6 +77,96 @@ public class SpringStackProvider implements StackProvider {
         files.add(generatePom(request));
         files.add(generateMainClass(request));
         files.add(generateApplicationProperties(request));
+
+        // Handle security configuration specific table modifications
+        if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled() && request.getTables() != null) {
+            com.firas.generator.model.config.SecurityConfig security = request.getSecurityConfig();
+            request.getTables().stream()
+                .filter(table -> table.getName().equalsIgnoreCase(security.getPrincipalEntity()))
+                .findFirst()
+                .ifPresent(table -> {
+                    System.out.println("FOUND Principal Table: " + table.getName());
+                    // 1. Inject Metadata for Entity.ftl
+                    table.addMetadata("isUserDetails", true);
+                    System.out.println("Injected isUserDetails=true for table " + table.getName());
+                    table.addMetadata("usernameField", security.getUsernameField());
+                    table.addMetadata("passwordField", security.getPasswordField());
+                    table.addMetadata("roleStrategy", security.getRoleStrategy());
+                    table.addMetadata("roleEntity", security.getRoleEntity());
+                    table.addMetadata("rbacMode", security.getRbacMode());
+                    table.addMetadata("roleField", "role"); // For Static mode: field name storing the Role enum
+
+                    // 2. Ensure Password Column Exists
+                    boolean hasPassword = table.getColumns().stream()
+                            .anyMatch(c -> c.getFieldName().equals(security.getPasswordField()));
+                    
+                    System.out.println("Has Password Field '" + security.getPasswordField() + "'? " + hasPassword);
+
+                    if (!hasPassword) {
+                        try {
+                            System.out.println("Injecting missing password field '" + security.getPasswordField() + "' into principal entity '" + table.getName() + "'");
+                            com.firas.generator.model.Column passwordCol = new com.firas.generator.model.Column();
+                            passwordCol.setName(security.getPasswordField()); // DB name
+                            passwordCol.setFieldName(security.getPasswordField());
+                            passwordCol.setJavaType("String");
+                            passwordCol.setType("VARCHAR(255)");
+                            passwordCol.setNullable(false);
+                            table.addColumn(passwordCol);
+                            System.out.println("Password field injected. Column count now: " + table.getColumns().size());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    // 3. Handle Role Entity Strategy M:N Injection
+                    if ("ENTITY".equalsIgnoreCase(security.getRoleStrategy())) {
+                        String roleEntityName = security.getRoleEntity();
+                        System.out.println("Checking M:N injection for role entity: " + roleEntityName);
+                        
+                        Table roleTable = request.getTables().stream()
+                                .filter(t -> t.getName().equalsIgnoreCase(roleEntityName))
+                                .findFirst()
+                                .orElse(null);
+
+                        if (roleTable != null) {
+                            System.out.println("Found Role Table: " + roleTable.getName());
+                            // Check for existing relationship
+                            System.out.println("Current relationships for " + table.getName() + ":");
+                            table.getRelationships().forEach(r -> System.out.println(" - Target: " + r.getTargetClassName()));
+
+                            boolean hasRelation = table.getRelationships().stream()
+                                    .anyMatch(r -> r.getTargetClassName().equalsIgnoreCase(roleTable.getClassName()));
+                            
+                            System.out.println("Has existing relation to Role? " + hasRelation);
+
+                            if (!hasRelation) {
+                                System.out.println("Injecting missing M:N relationship between '" + table.getName() + "' and '" + roleTable.getName() + "'");
+                                // Inject logical relationship (Owner side on User)
+                                com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
+                                userToRole.setType(RelationshipType.MANY_TO_MANY);
+                                userToRole.setFieldName("roles"); // Standard name
+                                userToRole.setTargetClassName(roleTable.getClassName());
+                                userToRole.setSourceTable(table.getName());
+                                userToRole.setTargetTable(roleTable.getName());
+                                userToRole.setJoinTable(table.getName().toLowerCase() + "_" + roleTable.getName().toLowerCase());
+                                userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
+                                userToRole.setTargetColumn(roleTable.getName().toLowerCase() + "_id");
+                                table.addRelationship(userToRole);
+                                System.out.println("Relationship injected. New count: " + table.getRelationships().size());
+                            }
+                        } else {
+                            System.out.println("WARN: Role entity '" + roleEntityName + "' not found. Downgrading to STRING strategy.");
+                            table.addMetadata("roleStrategy", "STRING");
+                        }
+                    }
+                });
+        }
+
+        // Generate Security Config if enabled
+        if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled()) {
+            files.addAll(generateExtendedSecurityFiles(request));
+            files.add(generateSecurityConfig(request));
+        }
         
         // Generate CRUD code if tables are provided
         if (request.getTables() != null && !request.getTables().isEmpty()) {
@@ -145,6 +221,7 @@ public class SpringStackProvider implements StackProvider {
         if (dependencies == null) {
             dependencies = new ArrayList<>();
         }
+
         model.put("dependencies", dependencies);
         
         // Check if Lombok is in dependencies
@@ -182,6 +259,21 @@ public class SpringStackProvider implements StackProvider {
         
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.properties.ftl", model);
         return new FilePreview("src/main/resources/application.properties", content, "properties");
+    }
+
+    /**
+     * Generates the Security Configuration class.
+     */
+    private FilePreview generateSecurityConfig(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("packageName", request.getPackageName());
+        model.put("security", request.getSecurityConfig());
+        
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "SecurityConfig.ftl", model);
+        String path = "src/main/java/" + request.getPackageName().replace(".", "/") + "/config/SecurityConfig.java";
+        
+        return new FilePreview(path, content, "java");
     }
     
     // ==================== Utility Methods ====================
@@ -236,8 +328,61 @@ public class SpringStackProvider implements StackProvider {
             try {
                 FileUtils.deleteDirectory(tempDir.toFile());
             } catch (IOException e) {
-                log.warn("Failed to clean up temp directory: {}", tempDir, e);
+                System.out.println("WARN: Failed to clean up temp directory: " + tempDir + " " + e.getMessage());
             }
         }
+
+    }
+
+    private List<FilePreview> generateExtendedSecurityFiles(ProjectRequest request) {
+        List<FilePreview> files = new ArrayList<>();
+        com.firas.generator.model.config.SecurityConfig security = request.getSecurityConfig();
+        String basePath = "src/main/java/" + request.getPackageName().replace(".", "/") + "/";
+
+        // 1. ApplicationConfig (Always)
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("packageName", request.getPackageName());
+        String appConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/ApplicationConfig.ftl", model);
+        files.add(new FilePreview(basePath + "config/ApplicationConfig.java", appConfigContent, "java"));
+
+        // 2. CustomUserDetailsService (If Principal set)
+        if (security.getPrincipalEntity() != null) {
+            Map<String, Object> tdsModel = new HashMap<>();
+            tdsModel.put("packageName", request.getPackageName());
+            tdsModel.put("repositoryName", security.getPrincipalEntity() + "Repository");
+            tdsModel.put("usernameField", security.getUsernameField());
+            String tdsContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/CustomUserDetailsService.ftl", tdsModel);
+            files.add(new FilePreview(basePath + "service/auth/CustomUserDetailsService.java", tdsContent, "java"));
+        }
+
+        // 3. Static RBAC Mode: Generate Permission and Role Enums
+        if ("STATIC".equalsIgnoreCase(security.getRbacMode())) {
+            Map<String, Object> rbacModel = new HashMap<>();
+            rbacModel.put("packageName", request.getPackageName());
+            rbacModel.put("permissions", security.getPermissions());
+            rbacModel.put("definedRoles", security.getDefinedRoles());
+            
+            // Generate Permission.java enum
+            String permissionContent = templateService.processTemplateToString(TEMPLATE_DIR + "Permission.ftl", rbacModel);
+            files.add(new FilePreview(basePath + "security/Permission.java", permissionContent, "java"));
+            
+            // Generate Role.java enum
+            String roleContent = templateService.processTemplateToString(TEMPLATE_DIR + "Role.ftl", rbacModel);
+            files.add(new FilePreview(basePath + "security/Role.java", roleContent, "java"));
+        }
+
+        // 4. JWT Components
+        if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
+            // JwtUtil
+            String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", model);
+            files.add(new FilePreview(basePath + "config/JwtUtil.java", jwtUtilContent, "java"));
+
+            // JwtFilter
+            String jwtFilterContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtFilter.ftl", model);
+            files.add(new FilePreview(basePath + "config/JwtAuthenticationFilter.java", jwtFilterContent, "java"));
+        }
+
+        return files;
     }
 }

@@ -312,7 +312,7 @@ export function SchemaEditorPhase() {
               onClick={() => setCurrentPhase(3)}
               className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
             >
-              Continue
+              Configure Security
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </div>

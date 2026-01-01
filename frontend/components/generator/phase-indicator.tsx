@@ -1,13 +1,14 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { FileCode2, Workflow, Rocket, Check } from "lucide-react"
+import { FileCode2, Workflow, Rocket, Check, Shield } from "lucide-react"
 import { useGeneratorStore } from "@/lib/store"
 
 const phases = [
   { id: 1, label: "SQL Parser", icon: FileCode2 },
   { id: 2, label: "Schema Editor", icon: Workflow },
-  { id: 3, label: "Generate", icon: Rocket },
+  { id: 3, label: "Security", icon: Shield },
+  { id: 4, label: "Generate", icon: Rocket },
 ]
 
 export function PhaseIndicator() {
@@ -33,12 +34,12 @@ export function PhaseIndicator() {
                     onClick={() => canClick && setCurrentPhase(phase.id)}
                     disabled={!canClick}
                     className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl transition-all ${isActive
-                        ? "bg-gradient-to-r from-primary to-accent text-primary-foreground glow-sm"
-                        : isCompleted
-                          ? "bg-primary/20 text-primary"
-                          : canClick
-                            ? "glass text-muted-foreground hover:text-foreground"
-                            : "glass text-muted-foreground/50 cursor-not-allowed"
+                      ? "bg-gradient-to-r from-primary to-accent text-primary-foreground glow-sm"
+                      : isCompleted
+                        ? "bg-primary/20 text-primary"
+                        : canClick
+                          ? "glass text-muted-foreground hover:text-foreground"
+                          : "glass text-muted-foreground/50 cursor-not-allowed"
                       }`}
                   >
                     <div className="relative">

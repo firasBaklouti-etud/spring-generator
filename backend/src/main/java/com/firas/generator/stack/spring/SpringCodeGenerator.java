@@ -1,7 +1,6 @@
 package com.firas.generator.stack.spring;
 
 import com.firas.generator.model.FilePreview;
-import com.firas.generator.model.ProjectRequest;
 import com.firas.generator.model.Table;
 import com.firas.generator.service.TemplateService;
 import com.firas.generator.stack.CodeGenerator;
@@ -96,10 +95,20 @@ public class SpringCodeGenerator implements CodeGenerator {
     /**
      * Creates the template data model for a table.
      */
-    private Map<String, Object> createModel(Table table, String packageName) {
+     private Map<String, Object> createModel(Table table, String packageName) {
         Map<String, Object> model = new HashMap<>();
         model.put("table", table);
         model.put("packageName", packageName);
+
+
+        if (table.getMetadata() != null) {
+            System.out.println("DEBUG: Table " + table.getName() + " has metadata: " + table.getMetadata());
+            model.putAll(table.getMetadata());
+        } else {
+            System.out.println("DEBUG: Table " + table.getName() + " has NULL metadata");
+        }
+        
         return model;
+
     }
 }

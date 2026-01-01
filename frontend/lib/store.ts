@@ -128,7 +128,34 @@ export interface ProjectConfig {
   nodeConfig: NodeConfig
   nestConfig: NestConfig
   fastapiConfig: FastAPIConfig
+  securityConfig: SecurityConfig
 }
+
+export interface SecurityRule {
+  path: string
+  method: string
+  rule: string // PERMIT_ALL, AUTHENTICATED, HAS_ROLE
+  role?: string
+}
+
+export interface SecurityConfig {
+  enabled: boolean
+  authenticationType?: "BASIC" | "JWT" | "OAUTH2"
+  useDbAuth: boolean
+  rules?: SecurityRule[]
+  // Advanced Security
+  principalEntity?: string // Name of the entity (e.g. "User")
+  usernameField?: string   // Name of the field (e.g. "email")
+  passwordField?: string   // Name of the field (e.g. "password")
+  roleStrategy?: "STRING" | "ENTITY" // Legacy (keep for now or remove if breaking)
+  rbacMode?: "STATIC" | "DYNAMIC"    // NEW: Dual-Mode RBAC
+  roleEntity?: string      // Name of the role entity (for Dynamic mode)
+
+  // RBAC Configuration
+  permissions?: string[]   // List of available permissions (e.g. "user:read")
+  definedRoles?: { name: string, permissions: string[] }[] // Role definitions
+}
+
 
 export interface FilePreview {
   path: string
@@ -186,8 +213,14 @@ interface GeneratorStore {
   dependencyGroups: DependencyGroup[]
   setDependencyGroups: (groups: DependencyGroup[]) => void
 
+  setSecurityConfig: (config: Partial<SecurityConfig>) => void
+  addSecurityRule: (rule: SecurityRule) => void
+  removeSecurityRule: (path: string, method: string) => void
+  updateSecurityRule: (path: string, method: string, updates: Partial<SecurityRule>) => void
+
   // Reset
   reset: () => void
+
 }
 
 const defaultSpringConfig: SpringConfig = {
@@ -238,6 +271,11 @@ const defaultProjectConfig: ProjectConfig = {
   nodeConfig: defaultNodeConfig,
   nestConfig: defaultNestConfig,
   fastapiConfig: defaultFastAPIConfig,
+  securityConfig: {
+    enabled: false,
+    authenticationType: "BASIC",
+    useDbAuth: false,
+  },
 }
 
 export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
@@ -332,6 +370,52 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
         fastapiConfig: { ...state.projectConfig.fastapiConfig, ...config },
       },
     })),
+  setSecurityConfig: (config: Partial<SecurityConfig>) =>
+    set((state) => ({
+      projectConfig: {
+        ...state.projectConfig,
+        securityConfig: { ...state.projectConfig.securityConfig, ...config }
+      }
+    })),
+  addSecurityRule: (rule) =>
+    set((state) => {
+      const currentRules = state.projectConfig.securityConfig.rules || []
+      return {
+        projectConfig: {
+          ...state.projectConfig,
+          securityConfig: {
+            ...state.projectConfig.securityConfig,
+            rules: [...currentRules, rule]
+          }
+        }
+      }
+    }),
+  removeSecurityRule: (path, method) =>
+    set((state) => {
+      const currentRules = state.projectConfig.securityConfig.rules || []
+      return {
+        projectConfig: {
+          ...state.projectConfig,
+          securityConfig: {
+            ...state.projectConfig.securityConfig,
+            rules: currentRules.filter(r => !(r.path === path && r.method === method))
+          }
+        }
+      }
+    }),
+  updateSecurityRule: (path, method, updates) =>
+    set((state) => {
+      const currentRules = state.projectConfig.securityConfig.rules || []
+      return {
+        projectConfig: {
+          ...state.projectConfig,
+          securityConfig: {
+            ...state.projectConfig.securityConfig,
+            rules: currentRules.map(r => (r.path === path && r.method === method) ? { ...r, ...updates } : r)
+          }
+        }
+      }
+    }),
 
   previewFiles: [],
   setPreviewFiles: (files) => set({ previewFiles: files }),

@@ -22,6 +22,15 @@ This project is a **Multi-Stack Project Generator** capable of generating Spring
 *   **Multiple Tech Stacks**: Extensible architecture supporting various backend frameworks.
 *   **AI Integration**: Generate schemas and tables using AI.
 *   **IDE Preview**: Edit generated code before downloading.
+*   **Dual-Mode RBAC**: Static (Enum-based) and Dynamic (Database-driven) Role-Based Access Control.
+
+## 🔐 Security & RBAC Documentation
+
+- **[RBAC Implementation Status](RBAC_STATUS.md)**  
+  Current status of the Dual-Mode RBAC feature implementation.
+
+- **[RBAC Walkthrough](C:\Users\firas\.gemini\antigravity\brain\6e97d660-c449-4283-a3d9-cdd7db87c0e8\walkthrough.md)**  
+  Detailed walkthrough of RBAC implementation including frontend and backend changes.
 
 ## 🗺️ Quick Links
 

@@ -7,6 +7,7 @@ import { PhaseIndicator } from "@/components/generator/phase-indicator"
 import { SqlParserPhase } from "@/components/generator/sql-parser-phase"
 import { SchemaEditorPhase } from "@/components/generator/schema-editor-phase"
 import { ProjectConfigPhase } from "@/components/generator/project-config-phase"
+import { SecurityPhase } from "@/components/generator/security-phase"
 
 export default function GeneratorPage() {
   const { currentPhase } = useGeneratorStore()
@@ -49,6 +50,18 @@ export default function GeneratorPage() {
           {currentPhase === 3 && (
             <motion.div
               key="phase-3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <SecurityPhase />
+            </motion.div>
+          )}
+
+          {currentPhase === 4 && (
+            <motion.div
+              key="phase-4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
