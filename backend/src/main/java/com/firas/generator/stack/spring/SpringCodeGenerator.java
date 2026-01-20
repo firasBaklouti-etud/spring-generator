@@ -2,12 +2,16 @@ package com.firas.generator.stack.spring;
 
 import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.Table;
+import com.firas.generator.model.config.SecurityConfig;
+import com.firas.generator.model.config.SecurityRule;
 import com.firas.generator.service.TemplateService;
 import com.firas.generator.stack.CodeGenerator;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Code generator for Spring Boot projects.
@@ -26,8 +30,15 @@ public class SpringCodeGenerator implements CodeGenerator {
     
     private final TemplateService templateService;
     
+    // Security configuration for controller generation
+    private SecurityConfig securityConfig;
+    
     public SpringCodeGenerator(TemplateService templateService) {
         this.templateService = templateService;
+    }
+    
+    public void setSecurityConfig(SecurityConfig securityConfig) {
+        this.securityConfig = securityConfig;
     }
     
     @Override
@@ -63,6 +74,24 @@ public class SpringCodeGenerator implements CodeGenerator {
     @Override
     public FilePreview generateController(Table table, String packageName) {
         Map<String, Object> model = createModel(table, packageName);
+        
+        // Add security configuration to controller model
+        if (securityConfig != null && securityConfig.isEnabled()) {
+            model.put("securityEnabled", true);
+            
+            // Filter security rules for this entity's endpoints
+            if (securityConfig.getRules() != null) {
+                String entityPath = "/api/" + table.getClassName().toLowerCase() + "/";
+                List<SecurityRule> entityRules = securityConfig.getRules().stream()
+                    .filter(rule -> rule.getPath() != null && 
+                            (rule.getPath().startsWith(entityPath) || 
+                             rule.getPath().equals("/api/" + table.getClassName().toLowerCase() + "/**")))
+                    .collect(Collectors.toList());
+                model.put("securityRules", entityRules);
+            }
+        } else {
+            model.put("securityEnabled", false);
+        }
         
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "Controller.ftl", model);
         String path = "src/main/java/" + packageName.replace(".", "/") + "/controller/" + table.getClassName() + "Controller.java";
