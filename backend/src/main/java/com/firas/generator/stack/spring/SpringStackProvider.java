@@ -165,9 +165,9 @@ public class SpringStackProvider implements StackProvider {
                         System.out.println("Setting up Dynamic RBAC mode for principal entity: " + table.getName());
                         table.addMetadata("roleEntity", "Role"); // Dynamic mode always uses generated Role entity
                         
-                        // Check for existing relationship to Role
+                        // Check for existing relationship to Role (exact match for auto-generated entity)
                         boolean hasRelation = table.getRelationships().stream()
-                                .anyMatch(r -> r.getTargetClassName().equalsIgnoreCase("Role"));
+                                .anyMatch(r -> "Role".equals(r.getTargetClassName()));
                         
                         if (!hasRelation) {
                             System.out.println("Injecting M:N relationship to auto-generated Role entity");

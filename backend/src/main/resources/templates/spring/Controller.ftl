@@ -10,6 +10,41 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
+<#-- 
+  Macro to find security rule for a given HTTP method.
+  Sets the ruleResult variable in the calling scope.
+-->
+<#macro findSecurityRule httpMethod>
+<#assign ruleResult = "">
+<#if securityRules??>
+    <#list securityRules as rule>
+        <#if rule.method == httpMethod || rule.method == "ALL">
+            <#if rule.rule == "PERMIT_ALL">
+                <#assign ruleResult = "permitAll">
+            <#elseif rule.rule == "AUTHENTICATED">
+                <#assign ruleResult = "authenticated">
+            <#elseif rule.rule == "HAS_ROLE" && rule.role??>
+                <#assign ruleResult = "hasRole_" + rule.role>
+            </#if>
+        </#if>
+    </#list>
+</#if>
+</#macro>
+
+<#-- 
+  Macro to output @PreAuthorize annotation based on security rule.
+  Parameters: ruleValue - the security rule, defaultPermission - fallback permission
+-->
+<#macro preAuthorize ruleValue defaultPermission>
+<#if ruleValue == "authenticated">
+    @PreAuthorize("isAuthenticated()")
+<#elseif ruleValue?starts_with("hasRole_")>
+    @PreAuthorize("hasRole('${ruleValue?replace('hasRole_', '')}')")
+<#elseif ruleValue != "permitAll">
+    @PreAuthorize("hasAuthority('${defaultPermission}')")
+</#if>
+</#macro>
+
 @RestController
 @RequestMapping("/api/${table.className?lower_case}s")
 public class ${table.className}Controller {
@@ -22,28 +57,9 @@ public class ${table.className}Controller {
 
 <#if securityEnabled?? && securityEnabled>
     <#assign entityUpper = table.className?upper_case>
-    <#-- Check for READ permission rule -->
-    <#assign readRule = "">
-    <#if securityRules??>
-        <#list securityRules as rule>
-            <#if rule.method == "GET" || rule.method == "ALL">
-                <#if rule.rule == "PERMIT_ALL">
-                    <#assign readRule = "permitAll">
-                <#elseif rule.rule == "AUTHENTICATED">
-                    <#assign readRule = "authenticated">
-                <#elseif rule.rule == "HAS_ROLE" && rule.role??>
-                    <#assign readRule = "hasRole_" + rule.role>
-                </#if>
-            </#if>
-        </#list>
-    </#if>
-    <#if readRule == "authenticated">
-    @PreAuthorize("isAuthenticated()")
-    <#elseif readRule?starts_with("hasRole_")>
-    @PreAuthorize("hasRole('${readRule?replace('hasRole_', '')}')")
-    <#elseif readRule != "permitAll">
-    @PreAuthorize("hasAuthority('${entityUpper}_READ')")
-    </#if>
+    <@findSecurityRule httpMethod="GET"/>
+    <#assign readRule = ruleResult>
+    <@preAuthorize ruleValue=readRule defaultPermission="${entityUpper}_READ"/>
 </#if>
     @GetMapping
     public List<${table.className}> getAll() {
@@ -51,13 +67,7 @@ public class ${table.className}Controller {
     }
 
 <#if securityEnabled?? && securityEnabled>
-    <#if readRule == "authenticated">
-    @PreAuthorize("isAuthenticated()")
-    <#elseif readRule?starts_with("hasRole_")>
-    @PreAuthorize("hasRole('${readRule?replace('hasRole_', '')}')")
-    <#elseif readRule != "permitAll">
-    @PreAuthorize("hasAuthority('${entityUpper}_READ')")
-    </#if>
+    <@preAuthorize ruleValue=readRule defaultPermission="${entityUpper}_READ"/>
 </#if>
     @GetMapping("/{id}")
     public ResponseEntity<${table.className}> getById(@PathVariable <#list table.columns as col><#if col.primaryKey>${col.javaType}</#if></#list> id) {
@@ -67,28 +77,9 @@ public class ${table.className}Controller {
     }
 
 <#if securityEnabled?? && securityEnabled>
-    <#-- Check for WRITE permission rule -->
-    <#assign writeRule = "">
-    <#if securityRules??>
-        <#list securityRules as rule>
-            <#if rule.method == "POST" || rule.method == "ALL">
-                <#if rule.rule == "PERMIT_ALL">
-                    <#assign writeRule = "permitAll">
-                <#elseif rule.rule == "AUTHENTICATED">
-                    <#assign writeRule = "authenticated">
-                <#elseif rule.rule == "HAS_ROLE" && rule.role??>
-                    <#assign writeRule = "hasRole_" + rule.role>
-                </#if>
-            </#if>
-        </#list>
-    </#if>
-    <#if writeRule == "authenticated">
-    @PreAuthorize("isAuthenticated()")
-    <#elseif writeRule?starts_with("hasRole_")>
-    @PreAuthorize("hasRole('${writeRule?replace('hasRole_', '')}')")
-    <#elseif writeRule != "permitAll">
-    @PreAuthorize("hasAuthority('${entityUpper}_WRITE')")
-    </#if>
+    <@findSecurityRule httpMethod="POST"/>
+    <#assign writeRule = ruleResult>
+    <@preAuthorize ruleValue=writeRule defaultPermission="${entityUpper}_WRITE"/>
 </#if>
     @PostMapping
     public ${table.className} create(@RequestBody ${table.className} entity) {
@@ -96,28 +87,9 @@ public class ${table.className}Controller {
     }
 
 <#if securityEnabled?? && securityEnabled>
-    <#-- Check for DELETE permission rule -->
-    <#assign deleteRule = "">
-    <#if securityRules??>
-        <#list securityRules as rule>
-            <#if rule.method == "DELETE" || rule.method == "ALL">
-                <#if rule.rule == "PERMIT_ALL">
-                    <#assign deleteRule = "permitAll">
-                <#elseif rule.rule == "AUTHENTICATED">
-                    <#assign deleteRule = "authenticated">
-                <#elseif rule.rule == "HAS_ROLE" && rule.role??>
-                    <#assign deleteRule = "hasRole_" + rule.role>
-                </#if>
-            </#if>
-        </#list>
-    </#if>
-    <#if deleteRule == "authenticated">
-    @PreAuthorize("isAuthenticated()")
-    <#elseif deleteRule?starts_with("hasRole_")>
-    @PreAuthorize("hasRole('${deleteRule?replace('hasRole_', '')}')")
-    <#elseif deleteRule != "permitAll">
-    @PreAuthorize("hasAuthority('${entityUpper}_DELETE')")
-    </#if>
+    <@findSecurityRule httpMethod="DELETE"/>
+    <#assign deleteRule = ruleResult>
+    <@preAuthorize ruleValue=deleteRule defaultPermission="${entityUpper}_DELETE"/>
 </#if>
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable <#list table.columns as col><#if col.primaryKey>${col.javaType}</#if></#list> id) {

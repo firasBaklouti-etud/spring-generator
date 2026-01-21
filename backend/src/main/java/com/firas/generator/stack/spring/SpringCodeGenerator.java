@@ -81,11 +81,11 @@ public class SpringCodeGenerator implements CodeGenerator {
             
             // Filter security rules for this entity's endpoints
             if (securityConfig.getRules() != null) {
-                String entityPath = "/api/" + table.getClassName().toLowerCase() + "/";
+                String basePath = "/api/" + table.getClassName().toLowerCase();
                 List<SecurityRule> entityRules = securityConfig.getRules().stream()
                     .filter(rule -> rule.getPath() != null && 
-                            (rule.getPath().startsWith(entityPath) || 
-                             rule.getPath().equals("/api/" + table.getClassName().toLowerCase() + "/**")))
+                            (rule.getPath().startsWith(basePath + "/") || 
+                             rule.getPath().equals(basePath + "/**")))
                     .collect(Collectors.toList());
                 model.put("securityRules", entityRules);
             }

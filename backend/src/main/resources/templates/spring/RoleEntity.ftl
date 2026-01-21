@@ -35,7 +35,7 @@ public class Role {
 
     public Role(String name, Set<String> permissions) {
         this.name = name;
-        this.permissions = permissions;
+        this.permissions = permissions != null ? new HashSet<>(permissions) : new HashSet<>();
     }
 
     public Long getId() {
@@ -67,7 +67,7 @@ public class Role {
     }
 
     public void setPermissions(Set<String> permissions) {
-        this.permissions = permissions;
+        this.permissions = permissions != null ? new HashSet<>(permissions) : new HashSet<>();
     }
 
     public void addPermission(String permission) {
