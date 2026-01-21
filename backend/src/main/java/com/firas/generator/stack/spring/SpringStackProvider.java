@@ -159,6 +159,31 @@ public class SpringStackProvider implements StackProvider {
                             table.addMetadata("roleStrategy", "STRING");
                         }
                     }
+
+                    // 4. Handle Dynamic RBAC Mode M:N Injection
+                    if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
+                        System.out.println("Setting up Dynamic RBAC mode for principal entity: " + table.getName());
+                        table.addMetadata("roleEntity", "Role"); // Dynamic mode always uses generated Role entity
+                        
+                        // Check for existing relationship to Role (exact match for auto-generated entity)
+                        boolean hasRelation = table.getRelationships().stream()
+                                .anyMatch(r -> "Role".equals(r.getTargetClassName()));
+                        
+                        if (!hasRelation) {
+                            System.out.println("Injecting M:N relationship to auto-generated Role entity");
+                            com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
+                            userToRole.setType(RelationshipType.MANY_TO_MANY);
+                            userToRole.setFieldName("roles");
+                            userToRole.setTargetClassName("Role");
+                            userToRole.setSourceTable(table.getName());
+                            userToRole.setTargetTable("roles");
+                            userToRole.setJoinTable(table.getName().toLowerCase() + "_roles");
+                            userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
+                            userToRole.setTargetColumn("role_id");
+                            table.addRelationship(userToRole);
+                            System.out.println("Dynamic Role relationship injected. New count: " + table.getRelationships().size());
+                        }
+                    }
                 });
         }
 
@@ -166,6 +191,9 @@ public class SpringStackProvider implements StackProvider {
         if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled()) {
             files.addAll(generateExtendedSecurityFiles(request));
             files.add(generateSecurityConfig(request));
+            
+            // Set security config on code generator for @PreAuthorize annotations
+            codeGenerator.setSecurityConfig(request.getSecurityConfig());
         }
         
         // Generate CRUD code if tables are provided
@@ -372,7 +400,23 @@ public class SpringStackProvider implements StackProvider {
             files.add(new FilePreview(basePath + "security/Role.java", roleContent, "java"));
         }
 
-        // 4. JWT Components
+        // 4. Dynamic RBAC Mode: Generate Role JPA Entity
+        if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
+            Map<String, Object> rbacModel = new HashMap<>();
+            rbacModel.put("packageName", request.getPackageName());
+            
+            // Generate Role.java JPA entity (with @ElementCollection for permissions)
+            String roleEntityContent = templateService.processTemplateToString(TEMPLATE_DIR + "RoleEntity.ftl", rbacModel);
+            files.add(new FilePreview(basePath + "entity/Role.java", roleEntityContent, "java"));
+            
+            // Generate RoleRepository.java
+            Map<String, Object> repoModel = new HashMap<>();
+            repoModel.put("packageName", request.getPackageName());
+            String roleRepoContent = generateRoleRepository(request.getPackageName());
+            files.add(new FilePreview(basePath + "repository/RoleRepository.java", roleRepoContent, "java"));
+        }
+
+        // 5. JWT Components
         if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
             // JwtUtil
             String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", model);
@@ -384,5 +428,20 @@ public class SpringStackProvider implements StackProvider {
         }
 
         return files;
+    }
+
+    /**
+     * Generates a simple RoleRepository for Dynamic RBAC mode.
+     */
+    private String generateRoleRepository(String packageName) {
+        return "package " + packageName + ".repository;\n\n" +
+               "import " + packageName + ".entity.Role;\n" +
+               "import org.springframework.data.jpa.repository.JpaRepository;\n" +
+               "import org.springframework.stereotype.Repository;\n\n" +
+               "import java.util.Optional;\n\n" +
+               "@Repository\n" +
+               "public interface RoleRepository extends JpaRepository<Role, Long> {\n" +
+               "    Optional<Role> findByName(String name);\n" +
+               "}\n";
     }
 }
