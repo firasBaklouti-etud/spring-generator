@@ -69,11 +69,13 @@ export function ProjectConfigPhase() {
     previewFiles,
     dependencyGroups,
     setDependencyGroups,
+    sqlDialect,
   } = useGeneratorStore()
   const [showSuccess, setShowSuccess] = useState(false)
   const [showDependenciesModal, setShowDependenciesModal] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+  const [recommendedDepsApplied, setRecommendedDepsApplied] = useState(false)
 
   const selectedDependencyIds = projectConfig.dependencies
   const selectedStack = projectConfig.stackType
@@ -93,6 +95,46 @@ export function ProjectConfigPhase() {
     }
     fetchDependencies()
   }, [selectedStack, setDependencyGroups])
+
+  // Auto-select recommended dependencies based on database type and security settings
+  useEffect(() => {
+    const fetchRecommendedDependencies = async () => {
+      // Only apply recommended deps once per session to avoid overwriting user selections
+      if (recommendedDepsApplied) return
+      
+      try {
+        const securityEnabled = projectConfig.securityConfig?.enabled || false
+        const securityType = projectConfig.securityConfig?.authenticationType || ""
+        
+        const params = new URLSearchParams({
+          stackType: selectedStack,
+          databaseType: sqlDialect || "mysql",
+          securityEnabled: String(securityEnabled),
+          ...(securityType && { securityType }),
+        })
+        
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/dependencies/recommended?${params}`
+        )
+        
+        if (response.ok) {
+          const recommendedIds: string[] = await response.json()
+          
+          // Merge recommended dependencies with any existing user selections
+          const mergedDeps = [...new Set([...selectedDependencyIds, ...recommendedIds])]
+          setProjectConfig({ dependencies: mergedDeps })
+          setRecommendedDepsApplied(true)
+        }
+      } catch (error) {
+        console.error("Failed to fetch recommended dependencies:", error)
+      }
+    }
+    
+    // Only fetch if dependency groups are loaded
+    if (dependencyGroups.length > 0) {
+      fetchRecommendedDependencies()
+    }
+  }, [dependencyGroups, sqlDialect, projectConfig.securityConfig?.enabled, projectConfig.securityConfig?.authenticationType, selectedStack, recommendedDepsApplied, selectedDependencyIds, setProjectConfig])
 
   const getDependencyInfo = (id: string) => {
     for (const group of dependencyGroups) {
@@ -134,6 +176,7 @@ export function ProjectConfigPhase() {
       description: projectConfig.description,
       packageName: projectConfig.packageName,
       dependencies: fullDependencies,
+      databaseType: sqlDialect,
       includeEntity: projectConfig.includeEntity,
       includeRepository: projectConfig.includeRepository,
       includeService: projectConfig.includeService,

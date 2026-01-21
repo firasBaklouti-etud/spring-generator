@@ -46,6 +46,9 @@ public class ProjectRequest {
     /** Database tables for CRUD generation */
     private List<Table> tables;
     
+    /** Database type (mysql, postgresql, mariadb, sqlite, sqlserver) */
+    private String databaseType;
+    
     // ==================== Code Generation Flags (All Stacks) ====================
     
     /** Flag to include entity/model classes */
@@ -125,6 +128,9 @@ public class ProjectRequest {
 
     public List<Table> getTables() { return tables; }
     public void setTables(List<Table> tables) { this.tables = tables; }
+    
+    public String getDatabaseType() { return databaseType; }
+    public void setDatabaseType(String databaseType) { this.databaseType = databaseType; }
     
     public boolean isIncludeEntity() { return includeEntity; }
     public void setIncludeEntity(boolean includeEntity) { this.includeEntity = includeEntity; }
