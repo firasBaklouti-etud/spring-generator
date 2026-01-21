@@ -24,6 +24,7 @@ import { useGeneratorStore, type Table, type Relationship } from "@/lib/store"
 import { TableNode } from "./table-node"
 import { RelationshipEdge } from "./relationship-edge"
 import { AiGenerateModal } from "./ai-generate-modal"
+import { TableEditor } from "./table-editor"
 
 const nodeTypes = {
   tableNode: TableNode,
