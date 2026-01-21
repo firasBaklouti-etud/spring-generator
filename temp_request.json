@@ -1,0 +1,291 @@
+{
+    "name": "ECommerceBackend",
+    "packageName": "com.firas.ecommerce",
+    "includeEntity": true,
+    "includeRepository": true,
+    "includeService": true,
+    "includeController": true,
+    "includeDto": true,
+    "includeMapper": true,
+    "tables": [
+        {
+            "id": "1",
+            "name": "User",
+            "className": "User",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "BIGINT",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "primaryKey": true
+                },
+                {
+                    "name": "email",
+                    "type": "VARCHAR(255)",
+                    "fieldName": "email",
+                    "javaType": "String",
+                    "unique": true
+                },
+                {
+                    "name": "full_name",
+                    "type": "VARCHAR(100)",
+                    "fieldName": "fullName",
+                    "javaType": "String"
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "ONE_TO_MANY",
+                    "sourceTable": "User",
+                    "targetTable": "Order",
+                    "fieldName": "orders",
+                    "targetClassName": "Order",
+                    "mappedBy": "user"
+                }
+            ]
+        },
+        {
+            "id": "2",
+            "name": "Role",
+            "className": "Role",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "BIGINT",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "primaryKey": true
+                },
+                {
+                    "name": "name",
+                    "type": "VARCHAR(50)",
+                    "fieldName": "name",
+                    "javaType": "String",
+                    "unique": true
+                }
+            ],
+            "relationships": []
+        },
+        {
+            "id": "3",
+            "name": "Product",
+            "className": "Product",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "BIGINT",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "primaryKey": true
+                },
+                {
+                    "name": "name",
+                    "type": "VARCHAR(100)",
+                    "fieldName": "name",
+                    "javaType": "String"
+                },
+                {
+                    "name": "price",
+                    "type": "DECIMAL(10,2)",
+                    "fieldName": "price",
+                    "javaType": "java.math.BigDecimal"
+                },
+                {
+                    "name": "stock",
+                    "type": "INT",
+                    "fieldName": "stock",
+                    "javaType": "Integer"
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "MANY_TO_ONE",
+                    "sourceTable": "Product",
+                    "targetTable": "Category",
+                    "fieldName": "category",
+                    "targetClassName": "Category",
+                    "sourceColumn": "category_id"
+                }
+            ]
+        },
+        {
+            "id": "4",
+            "name": "Category",
+            "className": "Category",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "BIGINT",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "primaryKey": true
+                },
+                {
+                    "name": "name",
+                    "type": "VARCHAR(50)",
+                    "fieldName": "name",
+                    "javaType": "String"
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "ONE_TO_MANY",
+                    "sourceTable": "Category",
+                    "targetTable": "Product",
+                    "fieldName": "products",
+                    "targetClassName": "Product",
+                    "mappedBy": "category"
+                }
+            ]
+        },
+        {
+            "id": "5",
+            "name": "Order",
+            "className": "Order",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "BIGINT",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "primaryKey": true
+                },
+                {
+                    "name": "created_at",
+                    "type": "TIMESTAMP",
+                    "fieldName": "createdAt",
+                    "javaType": "java.time.LocalDateTime"
+                },
+                {
+                    "name": "status",
+                    "type": "VARCHAR(20)",
+                    "fieldName": "status",
+                    "javaType": "String"
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "MANY_TO_ONE",
+                    "sourceTable": "Order",
+                    "targetTable": "User",
+                    "fieldName": "user",
+                    "targetClassName": "User",
+                    "sourceColumn": "user_id"
+                },
+                {
+                    "type": "MANY_TO_MANY",
+                    "sourceTable": "Order",
+                    "targetTable": "Product",
+                    "fieldName": "products",
+                    "targetClassName": "Product",
+                    "joinTable": "order_items",
+                    "sourceColumn": "order_id",
+                    "targetColumn": "product_id"
+                }
+            ]
+        }
+    ],
+    "securityConfig": {
+        "enabled": true,
+        "authenticationType": "JWT",
+        "principalEntity": "User",
+        "usernameField": "email",
+        "passwordField": "password",
+        "roleStrategy": "ENTITY",
+        "roleEntity": "Role",
+        "rbacMode": "STATIC",
+        "permissions": [
+            "USER_READ",
+            "USER_WRITE",
+            "USER_DELETE",
+            "PRODUCT_READ",
+            "PRODUCT_WRITE",
+            "PRODUCT_DELETE",
+            "ORDER_READ",
+            "ORDER_WRITE",
+            "ORDER_DELETE",
+            "CATEGORY_READ",
+            "CATEGORY_WRITE",
+            "CATEGORY_DELETE"
+        ],
+        "definedRoles": [
+            {
+                "name": "USER",
+                "permissions": [
+                    "USER_READ",
+                    "PRODUCT_READ",
+                    "ORDER_READ",
+                    "ORDER_WRITE",
+                    "CATEGORY_READ"
+                ]
+            },
+            {
+                "name": "ADMIN",
+                "permissions": [
+                    "USER_READ",
+                    "USER_WRITE",
+                    "USER_DELETE",
+                    "PRODUCT_READ",
+                    "PRODUCT_WRITE",
+                    "PRODUCT_DELETE",
+                    "ORDER_READ",
+                    "ORDER_WRITE",
+                    "ORDER_DELETE",
+                    "CATEGORY_READ",
+                    "CATEGORY_WRITE",
+                    "CATEGORY_DELETE"
+                ]
+            }
+        ],
+        "rules": [
+            {
+                "path": "/api/auth/**",
+                "method": "ALL",
+                "rule": "PERMIT_ALL"
+            },
+            {
+                "path": "/api/products/**",
+                "method": "GET",
+                "rule": "PERMIT_ALL"
+            },
+            {
+                "path": "/api/products/**",
+                "method": "POST",
+                "rule": "HAS_ROLE",
+                "role": "ADMIN"
+            },
+            {
+                "path": "/api/products/**",
+                "method": "PUT",
+                "rule": "HAS_ROLE",
+                "role": "ADMIN"
+            },
+            {
+                "path": "/api/products/**",
+                "method": "DELETE",
+                "rule": "HAS_ROLE",
+                "role": "ADMIN"
+            },
+            {
+                "path": "/api/orders/**",
+                "method": "ALL",
+                "rule": "AUTHENTICATED"
+            },
+            {
+                "path": "/api/admin/**",
+                "method": "ALL",
+                "rule": "HAS_ROLE",
+                "role": "ADMIN"
+            }
+        ]
+    },
+    "springConfig": {
+        "bootVersion": "3.2.0",
+        "javaVersion": "17",
+        "packaging": "jar",
+        "buildTool": "maven",
+        "groupId": "com.firas",
+        "artifactId": "ecommerce-backend"
+    }
+}

@@ -1,14 +1,41 @@
 package com.firas.generator.model;
 
+/**
+ * Represents metadata for a Spring Boot dependency.
+ * 
+ * This class contains all the information needed to include a dependency in a Maven pom.xml file,
+ * including Maven coordinates (groupId, artifactId, version), scope, and descriptive information
+ * for display purposes.
+ * 
+ * @author Firas Baklouti
+ * @version 1.0
+ * @since 2025-12-01
+ */
 public class DependencyMetadata {
+    /** Unique identifier for this dependency (e.g., "web", "jpa", "security") */
     private String id;
+    
+    /** Human-readable name (e.g., "Spring Web", "Spring Data JPA") */
     private String name;
+    
+    /** Description of what this dependency provides */
     private String description;
+    
+    /** Maven groupId (e.g., "org.springframework.boot") */
     private String groupId;
+    
+    /** Maven artifactId (e.g., "spring-boot-starter-web") */
     private String artifactId;
+    
+    /** Version number (optional, may be managed by Spring Boot BOM) */
     private String version;
+    
+    /** Maven scope (e.g., "compile", "runtime", "provided", "test") */
     private String scope;
+    
+    /** Indicates if this is a Spring Boot starter dependency */
     private boolean isStarter;
+
 
     public DependencyMetadata() {
     }
@@ -56,4 +83,18 @@ public class DependencyMetadata {
 
     public boolean isStarter() { return isStarter; }
     public void setStarter(boolean starter) { isStarter = starter; }
+
+    @Override
+    public String toString() {
+        return "DependencyMetadata{" +
+                "id='" + id + '\'' +
+                ", name='" + name + '\'' +
+                ", description='" + description + '\'' +
+                ", groupId='" + groupId + '\'' +
+                ", artifactId='" + artifactId + '\'' +
+                ", version='" + version + '\'' +
+                ", scope='" + scope + '\'' +
+                ", isStarter=" + isStarter +
+                '}';
+    }
 }
