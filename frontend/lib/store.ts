@@ -122,6 +122,8 @@ export interface ProjectConfig {
   includeController: boolean
   includeDto: boolean
   includeMapper: boolean
+  includeTests: boolean
+  includeDocker: boolean
 
   // Stack-specific configs
   springConfig: SpringConfig
@@ -267,6 +269,8 @@ const defaultProjectConfig: ProjectConfig = {
   includeController: true,
   includeDto: false,
   includeMapper: false,
+  includeTests: false,
+  includeDocker: false,
   springConfig: defaultSpringConfig,
   nodeConfig: defaultNodeConfig,
   nestConfig: defaultNestConfig,

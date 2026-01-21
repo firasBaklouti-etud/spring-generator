@@ -66,6 +66,12 @@ public class ProjectRequest {
     /** Flag to include mapper classes for entity-DTO conversion */
     private boolean includeMapper;
     
+    /** Flag to include JUnit tests for repository and controller layers */
+    private boolean includeTests;
+    
+    /** Flag to include Docker files (Dockerfile, docker-compose.yml) */
+    private boolean includeDocker;
+    
     // ==================== Stack-Specific Configurations ====================
     
     /** Spring Boot specific configuration */
@@ -137,6 +143,12 @@ public class ProjectRequest {
 
     public boolean isIncludeMapper() { return includeMapper; }
     public void setIncludeMapper(boolean includeMapper) { this.includeMapper = includeMapper; }
+    
+    public boolean isIncludeTests() { return includeTests; }
+    public void setIncludeTests(boolean includeTests) { this.includeTests = includeTests; }
+    
+    public boolean isIncludeDocker() { return includeDocker; }
+    public void setIncludeDocker(boolean includeDocker) { this.includeDocker = includeDocker; }
     
     // Stack-specific config getters/setters
     

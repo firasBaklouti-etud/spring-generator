@@ -221,7 +221,22 @@ public class SpringStackProvider implements StackProvider {
                 if (request.isIncludeMapper()) {
                     files.add(codeGenerator.generateMapper(table, request.getPackageName()));
                 }
+                
+                // Generate tests if enabled
+                if (request.isIncludeTests()) {
+                    if (request.isIncludeRepository()) {
+                        files.add(codeGenerator.generateRepositoryTest(table, request.getPackageName()));
+                    }
+                    if (request.isIncludeController()) {
+                        files.add(codeGenerator.generateControllerTest(table, request.getPackageName()));
+                    }
+                }
             }
+        }
+        
+        // Generate Docker files if enabled
+        if (request.isIncludeDocker()) {
+            files.addAll(generateDockerFiles(request));
         }
         
         return files;
@@ -257,6 +272,11 @@ public class SpringStackProvider implements StackProvider {
                 .anyMatch(dep -> "lombok".equals(dep.getId()));
         model.put("hasLombok", hasLombok);
         
+        // Check if JWT authentication is enabled
+        boolean hasJwt = request.getSecurityConfig() != null 
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+        
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "pom.xml.ftl", model);
         return new FilePreview("pom.xml", content, "xml");
     }
@@ -284,6 +304,11 @@ public class SpringStackProvider implements StackProvider {
     private FilePreview generateApplicationProperties(ProjectRequest request) {
         Map<String, Object> model = new HashMap<>();
         model.put("request", request);
+        
+        // Check if JWT authentication is enabled
+        boolean hasJwt = request.getSecurityConfig() != null 
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
         
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.properties.ftl", model);
         return new FilePreview("src/main/resources/application.properties", content, "properties");
@@ -418,15 +443,82 @@ public class SpringStackProvider implements StackProvider {
 
         // 5. JWT Components
         if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
+            Map<String, Object> jwtModel = new HashMap<>();
+            jwtModel.put("request", request);
+            jwtModel.put("packageName", request.getPackageName());
+            jwtModel.put("security", security);
+            
             // JwtUtil
-            String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", model);
+            String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", jwtModel);
             files.add(new FilePreview(basePath + "config/JwtUtil.java", jwtUtilContent, "java"));
 
             // JwtFilter
-            String jwtFilterContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtFilter.ftl", model);
+            String jwtFilterContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtFilter.ftl", jwtModel);
             files.add(new FilePreview(basePath + "config/JwtAuthenticationFilter.java", jwtFilterContent, "java"));
+            
+            // Auth DTOs
+            String authRequestContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthRequest.ftl", jwtModel);
+            files.add(new FilePreview(basePath + "dto/AuthRequest.java", authRequestContent, "java"));
+            
+            String authResponseContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthResponse.ftl", jwtModel);
+            files.add(new FilePreview(basePath + "dto/AuthResponse.java", authResponseContent, "java"));
+            
+            String registerRequestContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RegisterRequest.ftl", jwtModel);
+            files.add(new FilePreview(basePath + "dto/RegisterRequest.java", registerRequestContent, "java"));
+            
+            // Auth Controller
+            String authControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthController.ftl", jwtModel);
+            files.add(new FilePreview(basePath + "controller/AuthController.java", authControllerContent, "java"));
         }
 
+        return files;
+    }
+
+    /**
+     * Generates Docker-related files (Dockerfile, docker-compose.yml, .dockerignore).
+     */
+    private List<FilePreview> generateDockerFiles(ProjectRequest request) {
+        List<FilePreview> files = new ArrayList<>();
+        
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        
+        // Check for specific database dependencies
+        List<DependencyMetadata> dependencies = request.getDependencies();
+        boolean hasMysql = dependencies != null && dependencies.stream()
+                .anyMatch(dep -> "mysql".equals(dep.getId()) || "mysql-connector-java".equals(dep.getArtifactId()));
+        boolean hasPostgres = dependencies != null && dependencies.stream()
+                .anyMatch(dep -> "postgresql".equals(dep.getId()) || "postgresql".equals(dep.getArtifactId()));
+        boolean hasMariadb = dependencies != null && dependencies.stream()
+                .anyMatch(dep -> "mariadb".equals(dep.getId()) || "mariadb-java-client".equals(dep.getArtifactId()));
+        boolean hasRedis = dependencies != null && dependencies.stream()
+                .anyMatch(dep -> "data-redis".equals(dep.getId()) || dep.getArtifactId() != null && dep.getArtifactId().contains("redis"));
+        boolean hasMongodb = dependencies != null && dependencies.stream()
+                .anyMatch(dep -> "data-mongodb".equals(dep.getId()) || dep.getArtifactId() != null && dep.getArtifactId().contains("mongo"));
+        
+        model.put("hasMysql", hasMysql);
+        model.put("hasPostgres", hasPostgres);
+        model.put("hasMariadb", hasMariadb);
+        model.put("hasRedis", hasRedis);
+        model.put("hasMongodb", hasMongodb);
+        
+        // Check for JWT
+        boolean hasJwt = request.getSecurityConfig() != null 
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+        
+        // Dockerfile
+        String dockerfileContent = templateService.processTemplateToString(TEMPLATE_DIR + "Dockerfile.ftl", model);
+        files.add(new FilePreview("Dockerfile", dockerfileContent, "dockerfile"));
+        
+        // docker-compose.yml
+        String dockerComposeContent = templateService.processTemplateToString(TEMPLATE_DIR + "docker-compose.yml.ftl", model);
+        files.add(new FilePreview("docker-compose.yml", dockerComposeContent, "yaml"));
+        
+        // .dockerignore
+        String dockerignoreContent = templateService.processTemplateToString(TEMPLATE_DIR + ".dockerignore.ftl", model);
+        files.add(new FilePreview(".dockerignore", dockerignoreContent, "text"));
+        
         return files;
     }
 

@@ -122,6 +122,30 @@ public class SpringCodeGenerator implements CodeGenerator {
     }
     
     /**
+     * Generates a JUnit test for the repository layer.
+     */
+    public FilePreview generateRepositoryTest(Table table, String packageName) {
+        Map<String, Object> model = createModel(table, packageName);
+        
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "RepositoryTest.ftl", model);
+        String path = "src/test/java/" + packageName.replace(".", "/") + "/repository/" + table.getClassName() + "RepositoryTest.java";
+        
+        return new FilePreview(path, content, "java");
+    }
+    
+    /**
+     * Generates a JUnit test for the controller layer using MockMvc.
+     */
+    public FilePreview generateControllerTest(Table table, String packageName) {
+        Map<String, Object> model = createModel(table, packageName);
+        
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "ControllerTest.ftl", model);
+        String path = "src/test/java/" + packageName.replace(".", "/") + "/controller/" + table.getClassName() + "ControllerTest.java";
+        
+        return new FilePreview(path, content, "java");
+    }
+    
+    /**
      * Creates the template data model for a table.
      */
      private Map<String, Object> createModel(Table table, String packageName) {
