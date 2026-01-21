@@ -75,7 +75,7 @@ public class AuthController {
         
         userRepository.save(user);
         
-        // Generate tokens
+        // Generate tokens - user implements UserDetails
         String token = jwtUtil.generateToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
         
@@ -86,16 +86,29 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@RequestBody String refreshToken) {
         try {
+            // Validate the refresh token first
+            if (refreshToken == null || refreshToken.isBlank()) {
+                return ResponseEntity.badRequest().build();
+            }
+            
+            // Remove quotes if present (from JSON body)
+            refreshToken = refreshToken.replace("\"", "").trim();
+            
             String username = jwtUtil.extractUsername(refreshToken);
-            // Validate refresh token and generate new access token
-            // This is a simplified implementation
+            
+            // Verify the token is not expired
+            if (jwtUtil.isTokenExpired(refreshToken)) {
+                return ResponseEntity.status(401).build();
+            }
+            
+            // Generate new access token
             return ResponseEntity.ok(new AuthResponse(
                     jwtUtil.generateTokenFromUsername(username),
                     refreshToken,
                     "Bearer"
             ));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(401).build();
         }
     }
 }

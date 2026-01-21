@@ -26,7 +26,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb
 </#if>
 <#if hasJwt?? && hasJwt>
-      - JWT_SECRET=${r"${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}"}
+      # SECURITY: Set JWT_SECRET env variable in production with a secure random key
+      # Generate with: openssl rand -base64 32
+      - JWT_SECRET=${r"${JWT_SECRET:-CHANGE_THIS_SECRET_IN_PRODUCTION}"}
       - JWT_EXPIRATION=36000000
       - JWT_REFRESH_EXPIRATION=604800000
 </#if>

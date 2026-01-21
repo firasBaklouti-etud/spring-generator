@@ -18,8 +18,12 @@ import java.util.function.Function;
 @Service
 public class JwtUtil {
 
-    // 256-bit key for HMAC-SHA256 - In production, use environment variable
-    @Value("${r"${jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}"}")
+    /**
+     * SECURITY WARNING: The default secret key is for development only!
+     * In production, set the JWT_SECRET environment variable with a secure, randomly generated key.
+     * You can generate a secure key using: openssl rand -base64 32
+     */
+    @Value("${r"${jwt.secret:CHANGE_THIS_SECRET_IN_PRODUCTION}"}")
     private String secretKey;
 
     @Value("${r"${jwt.expiration:36000000}"}")  // 10 hours default
@@ -73,7 +77,7 @@ public class JwtUtil {
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
     }
 
-    private boolean isTokenExpired(String token) {
+    public boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 
