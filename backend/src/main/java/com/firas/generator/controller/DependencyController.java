@@ -1,7 +1,6 @@
 package com.firas.generator.controller;
 
 import com.firas.generator.model.DependencyGroup;
-import com.firas.generator.model.DependencyMetadata;
 import com.firas.generator.stack.StackProviderFactory;
 import com.firas.generator.stack.StackType;
 import lombok.RequiredArgsConstructor;
