@@ -260,11 +260,85 @@ Check for:
 - Verify `setSecurityConfig` is called with new fields
 - Ensure `useEffect` in `security-phase.tsx` initializes data
 
+## Migration Guide
+
+### Migrating from Legacy `roleStrategy` to `rbacMode`
+
+If you have existing projects using the legacy `roleStrategy` field, follow these steps:
+
+#### 1. Understanding the Mapping
+
+| Legacy `roleStrategy` | New `rbacMode` | Description |
+|----------------------|----------------|-------------|
+| `STRING` | N/A | Simple string-based role (fallback) |
+| `ENTITY` | `DYNAMIC` | Database-driven roles |
+| N/A | `STATIC` | Enum-based roles (new) |
+
+#### 2. Migration Steps for ENTITY → DYNAMIC
+
+1. **Update Security Configuration**
+   ```json
+   // Before (Legacy)
+   {
+     "roleStrategy": "ENTITY",
+     "roleEntity": "Role"
+   }
+   
+   // After (New)
+   {
+     "rbacMode": "DYNAMIC",
+     "roleEntity": "Role"  // Optional: auto-generated if not specified
+   }
+   ```
+
+2. **Permissions**
+   - Previously: Roles stored names only
+   - Now: Roles store both names AND permissions via `@ElementCollection`
+
+3. **Generated Code Changes**
+   - Role entity now includes `Set<String> permissions` field
+   - `getAuthorities()` returns both role names and permissions
+
+#### 3. Migration Steps for New Static RBAC
+
+If you want compile-time type safety with enums:
+
+1. **Select Static Mode**
+   ```json
+   {
+     "rbacMode": "STATIC",
+     "permissions": ["USER_READ", "USER_WRITE", "PRODUCT_READ"],
+     "definedRoles": [
+       { "name": "USER", "permissions": ["USER_READ", "PRODUCT_READ"] },
+       { "name": "ADMIN", "permissions": ["USER_READ", "USER_WRITE", "PRODUCT_READ"] }
+     ]
+   }
+   ```
+
+2. **Generated Code**
+   - `Permission.java` enum
+   - `Role.java` enum with permission sets
+   - User entity with enum-based role field
+
+### Switching Between Modes
+
+#### Static → Dynamic
+1. Change `rbacMode` from `"STATIC"` to `"DYNAMIC"`
+2. Re-generate the project
+3. Create database tables for roles and permissions
+4. Seed initial role data matching your previous enum values
+
+#### Dynamic → Static
+1. Export current roles and permissions from database
+2. Change `rbacMode` from `"DYNAMIC"` to `"STATIC"`
+3. Define `permissions` and `definedRoles` arrays matching exported data
+4. Re-generate the project
+
 ## Future Enhancements
 
-- [ ] Dynamic RBAC entity generation
-- [ ] `@PreAuthorize` annotation generation for controllers
-- [ ] Permission-to-endpoint mapping UI
+- [x] Dynamic RBAC entity generation
+- [x] `@PreAuthorize` annotation generation for controllers
+- [ ] Permission-to-endpoint mapping UI (enhanced)
 - [ ] Role hierarchy support
 - [ ] Permission inheritance
 
@@ -272,4 +346,4 @@ Check for:
 
 For implementation details, see:
 - [RBAC Status](../RBAC_STATUS.md)
-- [RBAC Walkthrough](../C:\Users\firas\.gemini\antigravity\brain\6e97d660-c449-4283-a3d9-cdd7db87c0e8\walkthrough.md)
+- [Documentation Map](../DOCUMENTATION_MAP.md)

@@ -29,10 +29,45 @@ This project is a **Multi-Stack Project Generator** capable of generating Spring
 - **[RBAC Implementation Status](RBAC_STATUS.md)**  
   Current status of the Dual-Mode RBAC feature implementation.
 
-- **[RBAC Walkthrough](C:\Users\firas\.gemini\antigravity\brain\6e97d660-c449-4283-a3d9-cdd7db87c0e8\walkthrough.md)**  
-  Detailed walkthrough of RBAC implementation including frontend and backend changes.
+- **[RBAC Implementation Guide](backend/RBAC_GUIDE.md)**  
+  Comprehensive guide for Static and Dynamic RBAC modes.
+
+### RBAC Architecture Overview
+
+The Spring Generator supports two RBAC modes:
+
+#### Static RBAC (Compile-time)
+- **Permission.java**: Enum containing all permissions (e.g., `USER_READ`, `PRODUCT_WRITE`)
+- **Role.java**: Enum with permission sets and `getAuthorities()` method
+- **Entity Integration**: Principal entity's `getAuthorities()` delegates to Role enum
+- **Controller Security**: `@PreAuthorize` annotations generated based on security rules
+
+#### Dynamic RBAC (Runtime)
+- **Role Entity**: JPA entity with `@ElementCollection` for permissions stored in database
+- **RoleRepository**: Spring Data repository for Role entity
+- **ManyToMany Relationship**: Auto-injected between User and Role entities
+- **Controller Security**: `@PreAuthorize` annotations support both modes
+
+### Template Structure
+
+| Template | Purpose | Mode |
+|----------|---------|------|
+| `Permission.ftl` | Permission enum generation | Static |
+| `Role.ftl` | Role enum generation | Static |
+| `RoleEntity.ftl` | Role JPA entity generation | Dynamic |
+| `Controller.ftl` | REST controller with `@PreAuthorize` | Both |
+| `Entity.ftl` | JPA entity with `getAuthorities()` | Both |
+
+### Metadata Injection Flow
+
+1. **SpringStackProvider.generateProject()** identifies principal entity
+2. Injects metadata: `isUserDetails`, `rbacMode`, `roleField`, `usernameField`, `passwordField`
+3. For Dynamic mode, injects ManyToMany relationship to Role entity
+4. **SpringCodeGenerator** receives security config for `@PreAuthorize` generation
+5. Templates use metadata to generate appropriate code
 
 ## 🗺️ Quick Links
 
 *   [Backend Source Code](backend/Documentation.md)
 *   [Frontend Source Code](frontend/Documentation.md)
+*   [RBAC Status Tracking](RBAC_STATUS.md)
