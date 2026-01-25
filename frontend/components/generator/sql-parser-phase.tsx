@@ -366,7 +366,7 @@ export function SqlParserPhase() {
             const encodedSql = encodeURIComponent(sqlInput)
             const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/sqlParser/${encodedSql}?dialect=${sqlDialect}`, {
                 method: "GET",
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(10000),
             })
 
             if (response.ok) {
