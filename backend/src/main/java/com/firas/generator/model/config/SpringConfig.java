@@ -33,6 +33,9 @@ public class SpringConfig {
     /** Project structure format: layered, feature, ddd, hexagonal */
     private ProjectStructure projectStructure = ProjectStructure.LAYERED;
 
+    /** Database migration tool: "none", "flyway", or "liquibase" */
+    private String migrationTool = "none";
+
     // Constructors
     public SpringConfig() {}
     
@@ -62,4 +65,7 @@ public class SpringConfig {
 
     public ProjectStructure getProjectStructure() { return projectStructure; }
     public void setProjectStructure(ProjectStructure projectStructure) { this.projectStructure = projectStructure; }
+
+    public String getMigrationTool() { return migrationTool; }
+    public void setMigrationTool(String migrationTool) { this.migrationTool = migrationTool; }
 }

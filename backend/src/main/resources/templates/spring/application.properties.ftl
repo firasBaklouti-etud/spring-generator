@@ -42,9 +42,24 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
 </#if>
 
 # JPA/Hibernate Configuration
+<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool != "none">
+spring.jpa.hibernate.ddl-auto=validate
+<#else>
 spring.jpa.hibernate.ddl-auto=update
+</#if>
 spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
+
+<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "flyway">
+# ==================== Flyway Migrations ====================
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+</#if>
+<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "liquibase">
+# ==================== Liquibase Migrations ====================
+spring.liquibase.enabled=true
+spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.xml
+</#if>
 
 # Server Configuration
 server.port=8080

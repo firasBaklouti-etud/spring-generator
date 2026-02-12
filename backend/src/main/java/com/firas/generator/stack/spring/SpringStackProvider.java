@@ -11,9 +11,10 @@ import com.firas.generator.stack.*;
 import com.firas.generator.util.ZipUtils;
 import java.io.File;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,7 +23,8 @@ import java.util.*;
 
 @Component
 public class SpringStackProvider implements StackProvider {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(SpringStackProvider.class);
     private static final String TEMPLATE_DIR = "spring/";
     
     private final TemplateService templateService;
@@ -88,10 +90,9 @@ public class SpringStackProvider implements StackProvider {
                 .filter(table -> table.getName().equalsIgnoreCase(security.getPrincipalEntity()))
                 .findFirst()
                 .ifPresent(table -> {
-                    System.out.println("FOUND Principal Table: " + table.getName());
+                    log.debug("Found principal table: {}", table.getName());
                     // 1. Inject Metadata for Entity.ftl
                     table.addMetadata("isUserDetails", true);
-                    System.out.println("Injected isUserDetails=true for table " + table.getName());
                     table.addMetadata("usernameField", security.getUsernameField());
                     table.addMetadata("passwordField", security.getPasswordField());
                     table.addMetadata("roleStrategy", security.getRoleStrategy());
@@ -102,12 +103,10 @@ public class SpringStackProvider implements StackProvider {
                     // 2. Ensure Password Column Exists
                     boolean hasPassword = table.getColumns().stream()
                             .anyMatch(c -> c.getFieldName().equals(security.getPasswordField()));
-                    
-                    System.out.println("Has Password Field '" + security.getPasswordField() + "'? " + hasPassword);
 
                     if (!hasPassword) {
                         try {
-                            System.out.println("Injecting missing password field '" + security.getPasswordField() + "' into principal entity '" + table.getName() + "'");
+                            log.debug("Injecting missing password field '{}' into principal entity '{}'", security.getPasswordField(), table.getName());
                             com.firas.generator.model.Column passwordCol = new com.firas.generator.model.Column();
                             passwordCol.setName(security.getPasswordField()); // DB name
                             passwordCol.setFieldName(security.getPasswordField());
@@ -115,35 +114,26 @@ public class SpringStackProvider implements StackProvider {
                             passwordCol.setType("VARCHAR(255)");
                             passwordCol.setNullable(false);
                             table.addColumn(passwordCol);
-                            System.out.println("Password field injected. Column count now: " + table.getColumns().size());
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            log.error("Failed to inject password field", e);
                         }
                     }
 
                     // 3. Handle Role Entity Strategy M:N Injection
                     if ("ENTITY".equalsIgnoreCase(security.getRoleStrategy())) {
                         String roleEntityName = security.getRoleEntity();
-                        System.out.println("Checking M:N injection for role entity: " + roleEntityName);
-                        
+
                         Table roleTable = request.getTables().stream()
                                 .filter(t -> t.getName().equalsIgnoreCase(roleEntityName))
                                 .findFirst()
                                 .orElse(null);
 
                         if (roleTable != null) {
-                            System.out.println("Found Role Table: " + roleTable.getName());
-                            // Check for existing relationship
-                            System.out.println("Current relationships for " + table.getName() + ":");
-                            table.getRelationships().forEach(r -> System.out.println(" - Target: " + r.getTargetClassName()));
-
                             boolean hasRelation = table.getRelationships().stream()
                                     .anyMatch(r -> r.getTargetClassName().equalsIgnoreCase(roleTable.getClassName()));
-                            
-                            System.out.println("Has existing relation to Role? " + hasRelation);
 
                             if (!hasRelation) {
-                                System.out.println("Injecting missing M:N relationship between '" + table.getName() + "' and '" + roleTable.getName() + "'");
+                                log.debug("Injecting M:N relationship between '{}' and '{}'", table.getName(), roleTable.getName());
                                 // Inject logical relationship (Owner side on User)
                                 com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
                                 userToRole.setType(RelationshipType.MANY_TO_MANY);
@@ -155,25 +145,24 @@ public class SpringStackProvider implements StackProvider {
                                 userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
                                 userToRole.setTargetColumn(roleTable.getName().toLowerCase() + "_id");
                                 table.addRelationship(userToRole);
-                                System.out.println("Relationship injected. New count: " + table.getRelationships().size());
                             }
                         } else {
-                            System.out.println("WARN: Role entity '" + roleEntityName + "' not found. Downgrading to STRING strategy.");
+                            log.warn("Role entity '{}' not found. Downgrading to STRING strategy.", roleEntityName);
                             table.addMetadata("roleStrategy", "STRING");
                         }
                     }
 
                     // 4. Handle Dynamic RBAC Mode M:N Injection
                     if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
-                        System.out.println("Setting up Dynamic RBAC mode for principal entity: " + table.getName());
+                        log.debug("Setting up Dynamic RBAC mode for principal entity: {}", table.getName());
                         table.addMetadata("roleEntity", "Role"); // Dynamic mode always uses generated Role entity
-                        
+
                         // Check for existing relationship to Role (exact match for auto-generated entity)
                         boolean hasRelation = table.getRelationships().stream()
                                 .anyMatch(r -> "Role".equals(r.getTargetClassName()));
-                        
+
                         if (!hasRelation) {
-                            System.out.println("Injecting M:N relationship to auto-generated Role entity");
+                            log.debug("Injecting M:N relationship to auto-generated Role entity");
                             com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
                             userToRole.setType(RelationshipType.MANY_TO_MANY);
                             userToRole.setFieldName("roles");
@@ -184,7 +173,6 @@ public class SpringStackProvider implements StackProvider {
                             userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
                             userToRole.setTargetColumn("role_id");
                             table.addRelationship(userToRole);
-                            System.out.println("Dynamic Role relationship injected. New count: " + table.getRelationships().size());
                         }
                     }
                 });
@@ -241,7 +229,13 @@ public class SpringStackProvider implements StackProvider {
         if (request.isIncludeDocker()) {
             files.addAll(generateDockerFiles(request));
         }
-        
+
+        // Generate migration files if enabled
+        SpringConfig config = request.getEffectiveSpringConfig();
+        if (config.getMigrationTool() != null && !"none".equalsIgnoreCase(config.getMigrationTool())) {
+            files.addAll(generateMigrationFiles(request, config));
+        }
+
         return files;
     }
     
@@ -307,9 +301,10 @@ public class SpringStackProvider implements StackProvider {
     private FilePreview generateApplicationProperties(ProjectRequest request) {
         Map<String, Object> model = new HashMap<>();
         model.put("request", request);
-        
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
         // Check if JWT authentication is enabled
-        boolean hasJwt = request.getSecurityConfig() != null 
+        boolean hasJwt = request.getSecurityConfig() != null
                 && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
         model.put("hasJwt", hasJwt);
         
@@ -384,7 +379,7 @@ public class SpringStackProvider implements StackProvider {
             try {
                 FileUtils.deleteDirectory(tempDir.toFile());
             } catch (IOException e) {
-                System.out.println("WARN: Failed to clean up temp directory: " + tempDir + " " + e.getMessage());
+                log.warn("Failed to clean up temp directory: {}", tempDir, e);
             }
         }
 
@@ -522,6 +517,31 @@ public class SpringStackProvider implements StackProvider {
         String dockerignoreContent = templateService.processTemplateToString(TEMPLATE_DIR + ".dockerignore.ftl", model);
         files.add(new FilePreview(".dockerignore", dockerignoreContent, "text"));
         
+        return files;
+    }
+
+    /**
+     * Generates database migration files (Flyway or Liquibase).
+     */
+    private List<FilePreview> generateMigrationFiles(ProjectRequest request, SpringConfig springConfig) {
+        List<FilePreview> files = new ArrayList<>();
+        String migrationTool = springConfig.getMigrationTool();
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("tables", request.getTables() != null ? request.getTables() : new ArrayList<>());
+        model.put("request", request);
+
+        if ("flyway".equalsIgnoreCase(migrationTool)) {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "migration/V1__init_schema.sql.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/migration/V1__init_schema.sql", content, "sql"));
+        } else if ("liquibase".equalsIgnoreCase(migrationTool)) {
+            String masterContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/db.changelog-master.xml.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/changelog/db.changelog-master.xml", masterContent, "xml"));
+
+            String changesetContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/001-init-schema.xml.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/changelog/001-init-schema.xml", changesetContent, "xml"));
+        }
+
         return files;
     }
 

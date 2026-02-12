@@ -41,37 +41,7 @@ public class SpringDependencyProvider implements DependencyProvider {
      */
     @PostConstruct
     public void initialize() {
-        //initializeStaticDependencies();
         initializeDynamicDependencies();
-    }
-
-    /**
-     * Initializes all old hardcoded groups and dependencies.
-     */
-    private void initializeStaticDependencies() {
-        // Example: Developer Tools
-        DependencyGroup devTools = new DependencyGroup();
-        devTools.setName("Developer Tools");
-        devTools.addDependency(createDependency(
-                "devtools", "Spring Boot DevTools",
-                "Provides fast application restarts, LiveReload, and configurations for enhanced development experience.",
-                "org.springframework.boot", "spring-boot-devtools", null, "runtime"
-        ));
-        devTools.addDependency(createDependency(
-                "lombok", "Lombok",
-                "Java annotation library which helps to reduce boilerplate code.",
-                "org.projectlombok", "lombok", null, "provided"
-        ));
-        groups.add(devTools);
-
-        // TODO: Repeat for other groups (Web, Security, SQL, NoSQL, I/O, Ops) as in old code...
-
-        // Build dependency map
-        for (DependencyGroup group : groups) {
-            for (DependencyMetadata dep : group.getDependencies()) {
-                dependencyMap.put(dep.getId(), dep);
-            }
-        }
     }
 
     /**
@@ -107,7 +77,7 @@ public class SpringDependencyProvider implements DependencyProvider {
                     dependencyMetadata.setVersion(dep.get("version")!=null?dep.get("version").asText():"");
                     dependencyMetadata.setGroupId(dep.get("groupId")!=null?dep.get("groupId").asText():"");
                     dependencyMetadata.setDescription(dep.get("description")!=null?dep.get("description").asText():"");
-                    dependencyMetadata.setDescription(dep.get("starter")!=null?dep.get("starter").asText():"");
+                    dependencyMetadata.setStarter(dep.get("starter")!=null && dep.get("starter").asBoolean(false));
 
 
                     group.addDependency(dependencyMetadata);
@@ -122,31 +92,6 @@ public class SpringDependencyProvider implements DependencyProvider {
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch dependencies from Spring Initializr", e);
         }
-    }
-
-    /**
-     * Creates a DependencyMetadata object with the specified parameters.
-     *
-     * @param id Unique identifier for the dependency
-     * @param name Human-readable name
-     * @param description Description of the dependency
-     * @param groupId Maven groupId
-     * @param artifactId Maven artifactId
-     * @param version Version number (can be null)
-     * @param scope Maven scope (can be null)
-     * @return Configured DependencyMetadata object
-     */
-    private DependencyMetadata createDependency(String id, String name, String description,
-                                                String groupId, String artifactId, String version, String scope) {
-        DependencyMetadata dep = new DependencyMetadata();
-        dep.setId(id);
-        dep.setName(name);
-        dep.setDescription(description);
-        dep.setGroupId(groupId);
-        dep.setArtifactId(artifactId);
-        dep.setVersion(version);
-        dep.setScope(scope);
-        return dep;
     }
 
     /**

@@ -3,6 +3,7 @@ package com.firas.generator.controller;
 import com.firas.generator.model.Table;
 import com.firas.generator.util.sql.SqlParser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.SQLException;
@@ -24,6 +25,7 @@ import java.util.List;
  * @version 1.0
  * @since 2025-12-01
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/sqlParser")
 @RequiredArgsConstructor
@@ -60,8 +62,7 @@ public class SqlParserController {
             @PathVariable String sql,
             @RequestParam(required = false, defaultValue = "mysql") String dialect
     ) throws SQLException {
-        System.out.println("Parsing SQL with dialect: " + dialect);
-        System.out.println(sql);
+        log.debug("Parsing SQL with dialect: {}", dialect);
         return sqlParser.parseSql(sql, dialect);
     }
 }

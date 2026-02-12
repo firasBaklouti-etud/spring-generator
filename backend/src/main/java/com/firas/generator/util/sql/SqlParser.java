@@ -1,8 +1,7 @@
 package com.firas.generator.util.sql;
 
 import com.firas.generator.model.*;
-import com.firas.generator.util.sql.implementation.MysqlConnection;
-import com.firas.generator.util.sql.implementation.PostgresqlConnection;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.sql.*;
@@ -11,12 +10,19 @@ import java.util.*;
 @Component
 public class SqlParser {
 
+    private final SqlConnectionFactory sqlConnectionFactory;
+
+    @Autowired
+    public SqlParser(SqlConnectionFactory sqlConnectionFactory) {
+        this.sqlConnectionFactory = sqlConnectionFactory;
+    }
+
     public List<Table> parseSql(String sql) throws SQLException {
         return parseSql(sql, "mysql");
     }
 
     public List<Table> parseSql(String sql, String dialect) throws SQLException {
-        SqlConnection conn = SqlConnectionFactory.get(dialect);
+        SqlConnection conn = sqlConnectionFactory.get(dialect);
         return loadMetadata(conn.getConnection(sql));
     }
 

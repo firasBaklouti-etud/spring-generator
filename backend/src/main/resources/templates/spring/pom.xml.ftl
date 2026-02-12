@@ -63,6 +63,27 @@
 			<scope>runtime</scope>
 		</dependency>
 		</#if>
+
+		<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "flyway">
+		<!-- Flyway Database Migrations -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<#if request.databaseType?? && (request.databaseType == "mysql" || request.databaseType == "mariadb")>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-mysql</artifactId>
+		</dependency>
+		</#if>
+		</#if>
+		<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "liquibase">
+		<!-- Liquibase Database Migrations -->
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+		</#if>
 	</dependencies>
 
 	<build>

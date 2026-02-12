@@ -40,6 +40,7 @@ export interface SpringConfig {
   buildTool: "maven" | "gradle"
   packaging: "jar" | "war"
   projectStructure: ProjectStructure
+  migrationTool: "none" | "flyway" | "liquibase"
 }
 
 export interface NodeConfig {
@@ -249,6 +250,7 @@ const defaultSpringConfig: SpringConfig = {
   buildTool: "maven",
   packaging: "jar",
   projectStructure: "LAYERED",
+  migrationTool: "none",
 }
 
 const defaultNodeConfig: NodeConfig = {

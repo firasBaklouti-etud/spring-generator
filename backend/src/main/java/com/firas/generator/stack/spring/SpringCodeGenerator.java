@@ -220,23 +220,21 @@ public class SpringCodeGenerator implements CodeGenerator {
     public FilePreview generateDto(Table table, String packageName) {
         String effectivePackage = getEffectivePackage(packageName, table, "dto");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "dto");
-        
-        // TODO: Add Dto.ftl template for Spring
-        String content = "// DTO for " + table.getClassName() + "\n// TODO: Implement DTO template";
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Dto.ftl", model);
         String path = generatePath(packageName, table, "dto", "Dto", false);
-        
+
         return new FilePreview(path, content, "java");
     }
-    
+
     @Override
     public FilePreview generateMapper(Table table, String packageName) {
         String effectivePackage = getEffectivePackage(packageName, table, "mapper");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "mapper");
-        
-        // TODO: Add Mapper.ftl template for Spring
-        String content = "// Mapper for " + table.getClassName() + "\n// TODO: Implement Mapper template";
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Mapper.ftl", model);
         String path = generatePath(packageName, table, "mapper", "Mapper", false);
-        
+
         return new FilePreview(path, content, "java");
     }
     
@@ -283,10 +281,7 @@ public class SpringCodeGenerator implements CodeGenerator {
         model.put("projectStructure", getProjectStructure().getId());
 
         if (table.getMetadata() != null) {
-            System.out.println("DEBUG: Table " + table.getName() + " has metadata: " + table.getMetadata());
             model.putAll(table.getMetadata());
-        } else {
-            System.out.println("DEBUG: Table " + table.getName() + " has NULL metadata");
         }
         return model;
     }
