@@ -26,6 +26,7 @@ public class GoogleADKProvider implements AIProvider {
     private static final String USER_ID = "student";
     private static final String NAME = "sql_table_assistent";
 
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final BaseAgent rootAgent;
 
@@ -38,7 +39,7 @@ public class GoogleADKProvider implements AIProvider {
 
         return LlmAgent.builder()
                 .name(NAME)
-                .model("gemini-2.0-flash")
+                .model("gemini-2.5-flash")
                 .description("Agent to assist on SQL schema generation and modification.")
                 .instruction(instruction)
                 .build();

@@ -72,16 +72,20 @@ public class SpringStackProvider implements StackProvider {
     public List<FilePreview> generateProject(ProjectRequest request) throws IOException {
         // Apply type mappings to all columns
         applyTypeMappings(request);
-        
+
         List<FilePreview> files = new ArrayList<>();
-        
+
         // Set Spring config on code generator for project structure support
         codeGenerator.setSpringConfig(request.getEffectiveSpringConfig());
+
+        try {
         
         // Generate project structure files
         files.add(generatePom(request));
         files.add(generateMainClass(request));
         files.add(generateApplicationProperties(request));
+        files.add(generateApplicationDevProperties(request));
+        files.add(generateGitignore());
 
         // Handle security configuration specific table modifications
         if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled() && request.getTables() != null) {
@@ -182,13 +186,27 @@ public class SpringStackProvider implements StackProvider {
         if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled()) {
             files.addAll(generateExtendedSecurityFiles(request));
             files.add(generateSecurityConfig(request));
-            
+
             // Set security config on code generator for @PreAuthorize annotations
             codeGenerator.setSecurityConfig(request.getSecurityConfig());
         }
-        
+
+        // Generate CORS configuration
+        files.add(generateCorsConfig(request));
+
+        // Generate Global Exception Handler
+        files.add(generateGlobalExceptionHandler(request));
+
+        // Generate OpenAPI/Swagger configuration
+        files.add(generateOpenApiConfig(request));
+
+        // Generate E2E HTTP test file
+        files.add(generateE2EHttp(request));
+
         // Generate CRUD code if tables are provided
         if (request.getTables() != null && !request.getTables().isEmpty()) {
+            boolean includeDto = request.isIncludeDto() || request.isIncludeController() || request.isIncludeService();
+            boolean includeMapper = request.isIncludeMapper() || includeDto;
             for (Table table : request.getTables()) {
                 if (table.isJoinTable()) {
                     continue; // Skip join tables
@@ -206,10 +224,10 @@ public class SpringStackProvider implements StackProvider {
                 if (request.isIncludeController()) {
                     files.add(codeGenerator.generateController(table, request.getPackageName()));
                 }
-                if (request.isIncludeDto()) {
+                if (includeDto) {
                     files.add(codeGenerator.generateDto(table, request.getPackageName()));
                 }
-                if (request.isIncludeMapper()) {
+                if (includeMapper) {
                     files.add(codeGenerator.generateMapper(table, request.getPackageName()));
                 }
                 
@@ -237,8 +255,11 @@ public class SpringStackProvider implements StackProvider {
         }
 
         return files;
+        } finally {
+            codeGenerator.clearConfig();
+        }
     }
-    
+
     @Override
     public byte[] generateProjectZip(ProjectRequest request) throws IOException {
         List<FilePreview> files = generateProject(request);
@@ -252,28 +273,169 @@ public class SpringStackProvider implements StackProvider {
      */
     private FilePreview generatePom(ProjectRequest request) {
         SpringConfig config = request.getEffectiveSpringConfig();
-        
+
         Map<String, Object> model = new HashMap<>();
         model.put("request", request);
         model.put("springConfig", config);
-        
+
         List<DependencyMetadata> dependencies = request.getDependencies();
         if (dependencies == null) {
             dependencies = new ArrayList<>();
         }
 
+        // Normalize dependency metadata before template rendering
+        for (DependencyMetadata dep : dependencies) {
+            if (dep.getVersion() != null && dep.getVersion().isBlank()) {
+                dep.setVersion(null);
+            }
+            if (dep.getArtifactId() != null && dep.getArtifactId().equals("spring-boot-starter-webmvc")) {
+                dep.setArtifactId("spring-boot-starter-web");
+                if (dep.getGroupId() == null || dep.getGroupId().isBlank()) {
+                    dep.setGroupId("org.springframework.boot");
+                }
+                if (dep.getId() == null || dep.getId().isBlank()) {
+                    dep.setId("web");
+                }
+            }
+        }
+
+        // Auto-include essential dependencies based on project features
+        boolean hasTables = request.getTables() != null && !request.getTables().isEmpty();
+        boolean hasWeb = dependencies.stream().anyMatch(dep -> "web".equals(dep.getId())
+                || "spring-boot-starter-web".equals(dep.getArtifactId()));
+        boolean hasJpa = dependencies.stream().anyMatch(dep -> "data-jpa".equals(dep.getId())
+                || "spring-boot-starter-data-jpa".equals(dep.getArtifactId()));
+        boolean hasSecurity = dependencies.stream().anyMatch(dep -> "security".equals(dep.getId())
+                || "spring-boot-starter-security".equals(dep.getArtifactId()));
+        boolean hasValidation = dependencies.stream().anyMatch(dep -> "validation".equals(dep.getId())
+                || "spring-boot-starter-validation".equals(dep.getArtifactId()));
+
+        if (request.isIncludeController() && hasTables && !hasWeb) {
+            DependencyMetadata webDep = new DependencyMetadata();
+            webDep.setId("web");
+            webDep.setGroupId("org.springframework.boot");
+            webDep.setArtifactId("spring-boot-starter-web");
+            dependencies.add(webDep);
+        }
+        if (hasTables && !hasJpa) {
+            DependencyMetadata jpaDep = new DependencyMetadata();
+            jpaDep.setId("data-jpa");
+            jpaDep.setGroupId("org.springframework.boot");
+            jpaDep.setArtifactId("spring-boot-starter-data-jpa");
+            dependencies.add(jpaDep);
+        }
+        if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled() && !hasSecurity) {
+            DependencyMetadata secDep = new DependencyMetadata();
+            secDep.setId("security");
+            secDep.setGroupId("org.springframework.boot");
+            secDep.setArtifactId("spring-boot-starter-security");
+            dependencies.add(secDep);
+        }
+        if (hasTables && !hasValidation) {
+            DependencyMetadata valDep = new DependencyMetadata();
+            valDep.setId("validation");
+            valDep.setGroupId("org.springframework.boot");
+            valDep.setArtifactId("spring-boot-starter-validation");
+            dependencies.add(valDep);
+        }
+
+        // Auto-include database driver based on databaseType
+        if (hasTables && request.getDatabaseType() != null) {
+            boolean hasDriver = dependencies.stream().anyMatch(dep -> {
+                String aid = dep.getArtifactId();
+                return aid != null && (aid.contains("mysql") || aid.contains("postgresql")
+                        || aid.contains("mariadb") || aid.contains("h2")
+                        || aid.contains("sqlserver") || aid.contains("sqlite"));
+            });
+            if (!hasDriver) {
+                DependencyMetadata driverDep = new DependencyMetadata();
+                driverDep.setScope("runtime");
+                switch (request.getDatabaseType().toLowerCase()) {
+                    case "mysql" -> {
+                        driverDep.setId("mysql");
+                        driverDep.setGroupId("com.mysql");
+                        driverDep.setArtifactId("mysql-connector-j");
+                    }
+                    case "postgresql" -> {
+                        driverDep.setId("postgresql");
+                        driverDep.setGroupId("org.postgresql");
+                        driverDep.setArtifactId("postgresql");
+                    }
+                    case "mariadb" -> {
+                        driverDep.setId("mariadb");
+                        driverDep.setGroupId("org.mariadb.jdbc");
+                        driverDep.setArtifactId("mariadb-java-client");
+                    }
+                    case "h2" -> {
+                        driverDep.setId("h2");
+                        driverDep.setGroupId("com.h2database");
+                        driverDep.setArtifactId("h2");
+                    }
+                    case "sqlserver" -> {
+                        driverDep.setId("sqlserver");
+                        driverDep.setGroupId("com.microsoft.sqlserver");
+                        driverDep.setArtifactId("mssql-jdbc");
+                    }
+                    default -> driverDep = null;
+                }
+                if (driverDep != null) {
+                    dependencies.add(driverDep);
+                }
+            }
+        }
+
+        // Auto-include H2 for dev profile (test scope) if not already present
+        if (hasTables) {
+            boolean hasH2 = dependencies.stream().anyMatch(dep -> "h2".equals(dep.getId())
+                    || (dep.getArtifactId() != null && dep.getArtifactId().contains("h2")));
+            if (!hasH2) {
+                DependencyMetadata h2Dep = new DependencyMetadata();
+                h2Dep.setId("h2");
+                h2Dep.setGroupId("com.h2database");
+                h2Dep.setArtifactId("h2");
+                h2Dep.setScope("runtime");
+                dependencies.add(h2Dep);
+            }
+        }
+
+        // Auto-include springdoc-openapi for API documentation
+        boolean hasSpringdoc = dependencies.stream().anyMatch(dep ->
+                dep.getArtifactId() != null && dep.getArtifactId().contains("springdoc"));
+        if (!hasSpringdoc) {
+            DependencyMetadata springdocDep = new DependencyMetadata();
+            springdocDep.setId("springdoc-openapi");
+            springdocDep.setGroupId("org.springdoc");
+            springdocDep.setArtifactId("springdoc-openapi-starter-webmvc-ui");
+            // Choose compatible springdoc version based on Boot version
+            // springdoc 2.8.x requires Spring Boot 3.4+ (Spring Framework 6.2+)
+            // springdoc 2.3.0 works with Spring Boot 3.1-3.3
+            String bootVer = request.getBootVersion();
+            String springdocVersion = "2.3.0"; // Safe default for Boot 3.2.x
+            if (bootVer != null) {
+                try {
+                    String[] parts = bootVer.split("\\.");
+                    int minor = Integer.parseInt(parts[1]);
+                    if (minor >= 4) {
+                        springdocVersion = "2.8.4"; // Boot 3.4+
+                    }
+                } catch (Exception ignored) {}
+            }
+            springdocDep.setVersion(springdocVersion);
+            dependencies.add(springdocDep);
+        }
+
         model.put("dependencies", dependencies);
-        
+
         // Check if Lombok is in dependencies
         boolean hasLombok = dependencies.stream()
                 .anyMatch(dep -> "lombok".equals(dep.getId()));
         model.put("hasLombok", hasLombok);
-        
+
         // Check if JWT authentication is enabled
-        boolean hasJwt = request.getSecurityConfig() != null 
+        boolean hasJwt = request.getSecurityConfig() != null
                 && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
         model.put("hasJwt", hasJwt);
-        
+
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "pom.xml.ftl", model);
         return new FilePreview("pom.xml", content, "xml");
     }
@@ -310,6 +472,68 @@ public class SpringStackProvider implements StackProvider {
         
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.properties.ftl", model);
         return new FilePreview("src/main/resources/application.properties", content, "properties");
+    }
+
+    /**
+     * Generates the application-dev.properties file with H2 in-memory database for development.
+     */
+    private FilePreview generateApplicationDevProperties(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.properties.ftl", model);
+        return new FilePreview("src/main/resources/application-dev.properties", content, "properties");
+    }
+
+    /**
+     * Generates the .gitignore file.
+     */
+    private FilePreview generateGitignore() {
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + ".gitignore.ftl", new HashMap<>());
+        return new FilePreview(".gitignore", content, "text");
+    }
+
+    /**
+     * Generates the GlobalExceptionHandler class.
+     */
+    private FilePreview generateGlobalExceptionHandler(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        boolean securityEnabled = request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled();
+        model.put("securityEnabled", securityEnabled);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "GlobalExceptionHandler.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/GlobalExceptionHandler.java";
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates the OpenAPI/Swagger configuration class.
+     */
+    private FilePreview generateOpenApiConfig(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        model.put("request", request);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "OpenApiConfig.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/OpenApiConfig.java";
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates the CORS configuration class.
+     */
+    private FilePreview generateCorsConfig(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "CorsConfig.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/CorsConfig.java";
+        return new FilePreview(path, content, "java");
     }
 
     /**
@@ -423,20 +647,63 @@ public class SpringStackProvider implements StackProvider {
             files.add(new FilePreview(basePath + "security/Role.java", roleContent, "java"));
         }
 
-        // 4. Dynamic RBAC Mode: Generate Role JPA Entity
+        // 4. Dynamic RBAC Mode: Generate Role JPA Entity + Admin API
         if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
             Map<String, Object> rbacModel = new HashMap<>();
             rbacModel.put("packageName", request.getPackageName());
-            
+
             // Generate Role.java JPA entity (with @ElementCollection for permissions)
             String roleEntityContent = templateService.processTemplateToString(TEMPLATE_DIR + "RoleEntity.ftl", rbacModel);
             files.add(new FilePreview(basePath + "entity/Role.java", roleEntityContent, "java"));
-            
+
             // Generate RoleRepository.java
             Map<String, Object> repoModel = new HashMap<>();
             repoModel.put("packageName", request.getPackageName());
             String roleRepoContent = generateRoleRepository(request.getPackageName());
             files.add(new FilePreview(basePath + "repository/RoleRepository.java", roleRepoContent, "java"));
+
+            // Admin API: DataInitializer, RoleDto, RoleService, RoleController, UserRoleController
+            Map<String, Object> adminModel = new HashMap<>();
+            adminModel.put("packageName", request.getPackageName());
+            adminModel.put("security", security);
+
+            // Determine principal entity PK type for UserRoleController
+            String pkType = "Long"; // default
+            if (security.getPrincipalEntity() != null && request.getTables() != null) {
+                Table principalTable = request.getTables().stream()
+                    .filter(t -> t.getName().equalsIgnoreCase(security.getPrincipalEntity()))
+                    .findFirst()
+                    .orElse(null);
+                if (principalTable != null) {
+                    adminModel.put("principalTable", principalTable);
+                    pkType = principalTable.getColumns().stream()
+                        .filter(c -> c.isPrimaryKey())
+                        .map(c -> c.getJavaType())
+                        .findFirst()
+                        .orElse("Long");
+                }
+            }
+            adminModel.put("pkType", pkType);
+
+            // DataInitializer - seeds default roles and admin user
+            String dataInitContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/DataInitializer.ftl", adminModel);
+            files.add(new FilePreview(basePath + "config/DataInitializer.java", dataInitContent, "java"));
+
+            // RoleDto
+            String roleDtoContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleDto.ftl", adminModel);
+            files.add(new FilePreview(basePath + "dto/RoleDto.java", roleDtoContent, "java"));
+
+            // RoleService
+            String roleServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleService.ftl", adminModel);
+            files.add(new FilePreview(basePath + "service/RoleService.java", roleServiceContent, "java"));
+
+            // RoleController (admin API for role CRUD)
+            String roleControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleController.ftl", adminModel);
+            files.add(new FilePreview(basePath + "controller/RoleController.java", roleControllerContent, "java"));
+
+            // UserRoleController (admin API for user-role assignments)
+            String userRoleControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/UserRoleController.ftl", adminModel);
+            files.add(new FilePreview(basePath + "controller/UserRoleController.java", userRoleControllerContent, "java"));
         }
 
         // 5. JWT Components
@@ -445,6 +712,17 @@ public class SpringStackProvider implements StackProvider {
             jwtModel.put("request", request);
             jwtModel.put("packageName", request.getPackageName());
             jwtModel.put("security", security);
+
+            // Find principal table for dynamic template generation (RegisterRequest, AuthController)
+            if (security.getPrincipalEntity() != null && request.getTables() != null) {
+                Table principalTable = request.getTables().stream()
+                    .filter(t -> t.getName().equalsIgnoreCase(security.getPrincipalEntity()))
+                    .findFirst()
+                    .orElse(null);
+                if (principalTable != null) {
+                    jwtModel.put("principalTable", principalTable);
+                }
+            }
             
             // JwtUtil
             String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", jwtModel);
@@ -559,4 +837,13 @@ public class SpringStackProvider implements StackProvider {
                "    Optional<Role> findByName(String name);\n" +
                "}\n";
     }
-}
+    /**
+     * Generates an e2e.http file for testing the endpoints.
+     */
+    private FilePreview generateE2EHttp(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "e2e.http.ftl", model);
+        return new FilePreview("src/test/e2e.http", content, "http");
+    }}

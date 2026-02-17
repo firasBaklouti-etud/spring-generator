@@ -1,16 +1,19 @@
-package ${packageName}.controller;
+package ${packageName};
 
-import ${packageName}.entity.${table.className};
-import ${packageName}.service.${table.className}Service;
+import ${dtoPackage}.${table.className}Dto;
+import ${servicePackage}.${table.className}Service;
+import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 <#if securityEnabled?? && securityEnabled>
 import org.springframework.security.access.prepost.PreAuthorize;
 </#if>
 
-import java.util.List;
-
-<#-- 
+<#--
   Macro to find security rule for a given HTTP method.
   Sets the ruleResult variable in the calling scope.
 -->
@@ -31,7 +34,7 @@ import java.util.List;
 </#if>
 </#macro>
 
-<#-- 
+<#--
   Macro to output @PreAuthorize annotation based on security rule.
   Parameters: ruleValue - the security rule, defaultPermission - fallback permission
 -->
@@ -45,14 +48,24 @@ import java.util.List;
 </#if>
 </#macro>
 
+<#assign pkType = "Long">
+<#list table.columns as col>
+<#if col.primaryKey>
+<#assign pkType = col.javaType>
+</#if>
+</#list>
+<#assign resourceName = table.className?lower_case>
+<#if !resourceName?ends_with("s")>
+<#assign resourceName = resourceName + "s">
+</#if>
 @RestController
-@RequestMapping("/api/${table.className?lower_case}s")
+@RequestMapping("/api/${resourceName}")
 public class ${table.className}Controller {
 
     private final ${table.className}Service service;
 
     public ${table.className}Controller(${table.className}Service service) {
-    this.service = service;
+        this.service = service;
     }
 
 <#if securityEnabled?? && securityEnabled>
@@ -62,15 +75,15 @@ public class ${table.className}Controller {
     <@preAuthorize ruleValue=readRule defaultPermission="${entityUpper}_READ"/>
 </#if>
     @GetMapping
-    public List<${table.className}> getAll() {
-        return service.findAll();
+    public Page<${table.className}Dto> getAll(@PageableDefault(size = 20) Pageable pageable) {
+        return service.findAll(pageable);
     }
 
 <#if securityEnabled?? && securityEnabled>
     <@preAuthorize ruleValue=readRule defaultPermission="${entityUpper}_READ"/>
 </#if>
     @GetMapping("/{id}")
-    public ResponseEntity<${table.className}> getById(@PathVariable <#list table.columns as col><#if col.primaryKey>${col.javaType}</#if></#list> id) {
+    public ResponseEntity<${table.className}Dto> getById(@PathVariable ${pkType} id) {
         return service.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -82,8 +95,20 @@ public class ${table.className}Controller {
     <@preAuthorize ruleValue=writeRule defaultPermission="${entityUpper}_WRITE"/>
 </#if>
     @PostMapping
-    public ${table.className} create(@RequestBody ${table.className} entity) {
-        return service.save(entity);
+    public ResponseEntity<${table.className}Dto> create(@Valid @RequestBody ${table.className}Dto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.save(dto));
+    }
+
+<#if securityEnabled?? && securityEnabled>
+    <@findSecurityRule httpMethod="PUT"/>
+    <#assign updateRule = ruleResult>
+    <@preAuthorize ruleValue=updateRule defaultPermission="${entityUpper}_WRITE"/>
+</#if>
+    @PutMapping("/{id}")
+    public ResponseEntity<${table.className}Dto> update(@PathVariable ${pkType} id, @Valid @RequestBody ${table.className}Dto dto) {
+        return service.update(id, dto)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
 <#if securityEnabled?? && securityEnabled>
@@ -92,8 +117,8 @@ public class ${table.className}Controller {
     <@preAuthorize ruleValue=deleteRule defaultPermission="${entityUpper}_DELETE"/>
 </#if>
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable <#list table.columns as col><#if col.primaryKey>${col.javaType}</#if></#list> id) {
+    public ResponseEntity<Void> delete(@PathVariable ${pkType} id) {
         service.deleteById(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 }

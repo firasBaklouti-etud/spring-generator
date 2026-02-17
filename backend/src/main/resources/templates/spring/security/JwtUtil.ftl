@@ -23,13 +23,13 @@ public class JwtUtil {
      * In production, set the JWT_SECRET environment variable with a secure, randomly generated key.
      * You can generate a secure key using: openssl rand -base64 32
      */
-    @Value("${r"${jwt.secret:CHANGE_THIS_SECRET_IN_PRODUCTION}"}")
+    @Value("${"$"}{jwt.secret:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}")
     private String secretKey;
 
-    @Value("${r"${jwt.expiration:36000000}"}")  // 10 hours default
+    @Value("${"$"}{jwt.expiration:36000000}")  // 10 hours default
     private long jwtExpiration;
 
-    @Value("${r"${jwt.refresh-expiration:604800000}"}")  // 7 days default
+    @Value("${"$"}{jwt.refresh-expiration:604800000}")  // 7 days default
     private long refreshExpiration;
 
     public String extractUsername(String token) {

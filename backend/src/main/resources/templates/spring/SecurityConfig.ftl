@@ -28,14 +28,25 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable()) // Disable CSRF for stateless APIs
+            .csrf(csrf -> csrf.disable())
+            .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
                 // Allow Auth endpoints
                 .requestMatchers("/api/auth/**").permitAll()
+                // Allow Swagger/OpenAPI endpoints
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                // Allow H2 Console
+                .requestMatchers("/h2-console/**").permitAll()
+                // Allow Actuator
+                .requestMatchers("/actuator/**").permitAll()
                 <#if security.rules?? && (security.rules?size > 0)>
-                // Custom Rules
+                // Custom Security Rules
                 <#list security.rules as rule>
+                <#if rule.method == "ALL">
+                .requestMatchers("${rule.path}").<#if rule.rule == "PERMIT_ALL">permitAll()<#elseif rule.rule == "AUTHENTICATED">authenticated()<#elseif rule.rule == "HAS_ROLE">hasRole("${rule.role}")</#if>
+                <#else>
                 .requestMatchers(org.springframework.http.HttpMethod.${rule.method}, "${rule.path}").<#if rule.rule == "PERMIT_ALL">permitAll()<#elseif rule.rule == "AUTHENTICATED">authenticated()<#elseif rule.rule == "HAS_ROLE">hasRole("${rule.role}")</#if>
+                </#if>
                 </#list>
                 </#if>
                 // Default catch-all

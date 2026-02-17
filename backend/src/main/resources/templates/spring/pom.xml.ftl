@@ -27,7 +27,7 @@
         <dependency>
             <groupId>${dep.groupId}</groupId>
             <artifactId>${dep.artifactId}</artifactId>
-            <#if dep.version??>
+			<#if dep.version?has_content>
             <version>${dep.version}</version>
             </#if>
             <#if dep.scope??>
@@ -88,6 +88,15 @@
 
 	<build>
 		<plugins>
+			<#if request.javaVersion?? && request.javaVersion == "23">
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
+				</configuration>
+			</plugin>
+			</#if>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

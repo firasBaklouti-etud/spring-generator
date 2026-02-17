@@ -1,7 +1,7 @@
-package ${packageName}.mapper;
+package ${packageName};
 
-import ${basePackageName}.entity.${table.className};
-import ${basePackageName}.dto.${table.className}Dto;
+import ${entityPackage}.${table.className};
+import ${dtoPackage}.${table.className}Dto;
 <#assign hasRelationships = (table.relationships?? && table.relationships?size > 0)>
 <#assign hasCollections = false>
 <#if hasRelationships>
@@ -26,7 +26,10 @@ public class ${table.className}Mapper {
         ${table.className}Dto dto = new ${table.className}Dto();
 <#list table.columns as column>
 <#if !column.foreignKey>
+<#-- Skip password field in DTO mapping (security-sensitive) -->
+<#if !(isUserDetails?? && isUserDetails && passwordField?? && column.fieldName == passwordField)>
         dto.set${column.fieldName?cap_first}(entity.get${column.fieldName?cap_first}());
+</#if>
 </#if>
 </#list>
         return dto;
@@ -39,7 +42,9 @@ public class ${table.className}Mapper {
         ${table.className} entity = new ${table.className}();
 <#list table.columns as column>
 <#if !column.foreignKey && !column.primaryKey>
+<#if !(isUserDetails?? && isUserDetails && passwordField?? && column.fieldName == passwordField)>
         entity.set${column.fieldName?cap_first}(dto.get${column.fieldName?cap_first}());
+</#if>
 </#if>
 </#list>
         return entity;
@@ -51,7 +56,9 @@ public class ${table.className}Mapper {
         }
 <#list table.columns as column>
 <#if !column.foreignKey && !column.primaryKey>
+<#if !(isUserDetails?? && isUserDetails && passwordField?? && column.fieldName == passwordField)>
         entity.set${column.fieldName?cap_first}(dto.get${column.fieldName?cap_first}());
+</#if>
 </#if>
 </#list>
     }

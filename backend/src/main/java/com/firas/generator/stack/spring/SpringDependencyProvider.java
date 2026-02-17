@@ -13,6 +13,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Dependency provider for Spring Boot.
  * 
@@ -25,6 +28,8 @@ import java.util.Map;
  */
 @Component
 public class SpringDependencyProvider implements DependencyProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(SpringDependencyProvider.class);
 
     /** WebClient for making HTTP requests to Spring Initializr API */
     private final WebClient webClient = WebClient.create("https://start.spring.io");
@@ -81,6 +86,7 @@ public class SpringDependencyProvider implements DependencyProvider {
 
 
                     group.addDependency(dependencyMetadata);
+                    dependencyMap.put(dependencyMetadata.getId(), dependencyMetadata);
                 }
                 groups.add(group);
 
@@ -90,7 +96,8 @@ public class SpringDependencyProvider implements DependencyProvider {
 
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch dependencies from Spring Initializr", e);
+            log.warn("Failed to fetch dependencies from Spring Initializr. " +
+                    "The dependency listing feature will be unavailable until the API is reachable.", e);
         }
     }
 

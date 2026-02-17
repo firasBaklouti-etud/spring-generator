@@ -1,4 +1,4 @@
-package ${packageName}.entity;
+package ${packageName};
 
 import jakarta.persistence.*;
 <#assign hasRelationships = (table.relationships?? && table.relationships?size > 0)>
@@ -15,8 +15,38 @@ import jakarta.persistence.*;
 import java.util.List;
 import java.util.ArrayList;
 </#if>
+<#assign hasDate = false>
+<#assign hasDateTime = false>
+<#assign hasBigDecimal = false>
+<#assign hasUuid = false>
+<#list table.columns as column>
+<#if !column.foreignKey>
+<#if column.javaType == "LocalDate">
+<#assign hasDate = true>
+</#if>
+<#if column.javaType == "LocalDateTime">
+<#assign hasDateTime = true>
+</#if>
+<#if column.javaType == "BigDecimal" || column.javaType == "java.math.BigDecimal">
+<#assign hasBigDecimal = true>
+</#if>
+<#if column.javaType == "UUID" || column.javaType == "java.util.UUID">
+<#assign hasUuid = true>
+</#if>
+</#if>
+</#list>
+<#if hasDate>
 import java.time.LocalDate;
+</#if>
+<#if hasDateTime>
 import java.time.LocalDateTime;
+</#if>
+<#if hasBigDecimal>
+import java.math.BigDecimal;
+</#if>
+<#if hasUuid>
+import java.util.UUID;
+</#if>
 
 <#if isUserDetails?? && isUserDetails>
 import org.springframework.security.core.GrantedAuthority;
@@ -27,10 +57,7 @@ import java.util.Collection;
 <#if isUserDetails?? && isUserDetails>
 import com.fasterxml.jackson.annotation.JsonIgnore;
 <#if rbacMode?? && rbacMode == "STATIC">
-import ${packageName}.security.Role;
-</#if>
-<#if table.relationships?? && table.relationships?size &gt; 0>
-import lombok.ToString; // Assuming Lombok is available/used or manual exclusion needed
+import ${basePackageName}.security.Role;
 </#if>
 </#if>
 
@@ -46,7 +73,6 @@ public class ${table.className} <#if isUserDetails?? && isUserDetails>implements
     </#if>
     <#if isUserDetails?? && isUserDetails && column.fieldName == passwordField>
     @JsonIgnore
-    // @ToString.Exclude // Uncomment if using Lombok
     </#if>
     @Column(name = "${column.name}")
     private ${column.javaType} ${column.fieldName};
@@ -77,7 +103,9 @@ public class ${table.className} <#if isUserDetails?? && isUserDetails>implements
 
     </#if>
     <#elseif rel.type == "MANY_TO_MANY">
-    @ManyToMany(fetch = FetchType.EAGER) // Eager fetch for roles implies robust loading
+    <#-- Use EAGER only for security role relationships, LAZY for everything else -->
+    <#assign isRolesRelation = (isUserDetails?? && isUserDetails && rel.fieldName == "roles")>
+    @ManyToMany(fetch = FetchType.<#if isRolesRelation>EAGER<#else>LAZY</#if>)
     @JoinTable(
         name = "${rel.joinTable}",
         joinColumns = @JoinColumn(name = "${rel.sourceColumn}"),
@@ -91,10 +119,26 @@ public class ${table.className} <#if isUserDetails?? && isUserDetails>implements
 
 <#list table.columns as column>
     <#if !column.foreignKey>
+    <#-- Only suppress getters whose method name collides with UserDetails: getUsername(), getPassword() -->
+    <#assign isUserDetailsField = isUserDetails?? && isUserDetails && ((column.fieldName == "username") || (column.fieldName == "password"))>
+    <#-- If usernameField is not "username" but the column IS "username", provide an alias getter -->
+    <#assign needsAliasGetter = isUserDetails?? && isUserDetails && column.fieldName == "username" && usernameField?? && usernameField != "username">
+    <#if !isUserDetailsField>
     public ${column.javaType} get${column.fieldName?cap_first}() {
         return ${column.fieldName};
     }
 
+    </#if>
+    <#if needsAliasGetter>
+    /**
+     * Access the actual 'username' column value.
+     * Note: getUsername() is overridden by UserDetails to return the login identifier (${usernameField}).
+     */
+    public ${column.javaType} getUsernameValue() {
+        return username;
+    }
+
+    </#if>
     public void set${column.fieldName?cap_first}(${column.javaType} ${column.fieldName}) {
         this.${column.fieldName} = ${column.fieldName};
     }

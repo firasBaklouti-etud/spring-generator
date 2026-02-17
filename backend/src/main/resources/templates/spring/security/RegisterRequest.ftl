@@ -4,18 +4,30 @@ package ${packageName}.dto;
  * Request object for user registration
  */
 public class RegisterRequest {
-    
+
     private String username;
     private String password;
+<#if security.usernameField?? && security.usernameField != "email">
     private String email;
+</#if>
+<#-- Add extra columns from principal entity (skip PK, FK, username, password, and role fields) -->
+<#if principalTable?? && principalTable.columns??>
+<#list principalTable.columns as column>
+<#if !column.primaryKey
+    && !column.foreignKey
+    && !column.autoIncrement
+    && column.fieldName != security.usernameField
+    && column.fieldName != security.passwordField
+    && column.fieldName != "username"
+    && column.fieldName != "email"
+    && column.fieldName != "roles"
+    && column.fieldName != "role">
+    private ${column.javaType} ${column.fieldName};
+</#if>
+</#list>
+</#if>
 
     public RegisterRequest() {
-    }
-
-    public RegisterRequest(String username, String password, String email) {
-        this.username = username;
-        this.password = password;
-        this.email = email;
     }
 
     public String getUsername() {
@@ -34,6 +46,7 @@ public class RegisterRequest {
         this.password = password;
     }
 
+<#if security.usernameField?? && security.usernameField != "email">
     public String getEmail() {
         return email;
     }
@@ -41,4 +54,28 @@ public class RegisterRequest {
     public void setEmail(String email) {
         this.email = email;
     }
+</#if>
+<#-- Getters/setters for extra columns -->
+<#if principalTable?? && principalTable.columns??>
+<#list principalTable.columns as column>
+<#if !column.primaryKey
+    && !column.foreignKey
+    && !column.autoIncrement
+    && column.fieldName != security.usernameField
+    && column.fieldName != security.passwordField
+    && column.fieldName != "username"
+    && column.fieldName != "email"
+    && column.fieldName != "roles"
+    && column.fieldName != "role">
+
+    public ${column.javaType} get${column.fieldName?cap_first}() {
+        return ${column.fieldName};
+    }
+
+    public void set${column.fieldName?cap_first}(${column.javaType} ${column.fieldName}) {
+        this.${column.fieldName} = ${column.fieldName};
+    }
+</#if>
+</#list>
+</#if>
 }

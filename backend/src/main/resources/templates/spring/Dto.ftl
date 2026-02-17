@@ -1,8 +1,9 @@
-package ${packageName}.dto;
+package ${packageName};
 
 <#assign hasDate = false>
 <#assign hasDateTime = false>
 <#assign hasBigDecimal = false>
+<#assign hasUuid = false>
 <#list table.columns as column>
 <#if !column.foreignKey>
 <#if column.javaType == "LocalDate">
@@ -13,6 +14,9 @@ package ${packageName}.dto;
 </#if>
 <#if column.javaType == "java.math.BigDecimal" || column.javaType == "BigDecimal">
 <#assign hasBigDecimal = true>
+</#if>
+<#if column.javaType == "UUID" || column.javaType == "java.util.UUID">
+<#assign hasUuid = true>
 </#if>
 </#if>
 </#list>
@@ -25,11 +29,15 @@ import java.time.LocalDateTime;
 <#if hasBigDecimal>
 import java.math.BigDecimal;
 </#if>
+<#if hasUuid>
+import java.util.UUID;
+</#if>
 <#assign hasRelationships = (table.relationships?? && table.relationships?size > 0)>
 <#assign hasCollections = false>
 <#if hasRelationships>
 <#list table.relationships as rel>
-<#if rel.type == "ONE_TO_MANY" || rel.type == "MANY_TO_MANY">
+<#assign isRoleRel = (isUserDetails?? && isUserDetails && rel.fieldName == "roles")>
+<#if !isRoleRel && (rel.type == "ONE_TO_MANY" || rel.type == "MANY_TO_MANY")>
 <#assign hasCollections = true>
 <#break>
 </#if>
@@ -43,15 +51,22 @@ public class ${table.className}Dto {
 
 <#list table.columns as column>
 <#if !column.foreignKey>
+<#-- Skip password field in DTOs (security-sensitive) -->
+<#if !(isUserDetails?? && isUserDetails && passwordField?? && column.fieldName == passwordField)>
     private ${column.javaType} ${column.fieldName};
+</#if>
 </#if>
 </#list>
 <#if hasRelationships>
 <#list table.relationships as rel>
+<#-- Skip security role relationships (Role entity has no DTO) -->
+<#assign isRoleRel = (isUserDetails?? && isUserDetails && rel.fieldName == "roles")>
+<#if !isRoleRel>
 <#if rel.type == "MANY_TO_ONE" || rel.type == "ONE_TO_ONE">
     private <#list rel.targetTable?split("_") as part>${part?cap_first}</#list>Dto ${rel.fieldName};
 <#elseif rel.type == "ONE_TO_MANY" || rel.type == "MANY_TO_MANY">
     private List<<#list rel.targetTable?split("_") as part>${part?cap_first}</#list>Dto> ${rel.fieldName};
+</#if>
 </#if>
 </#list>
 </#if>
@@ -61,6 +76,7 @@ public class ${table.className}Dto {
 
 <#list table.columns as column>
 <#if !column.foreignKey>
+<#if !(isUserDetails?? && isUserDetails && passwordField?? && column.fieldName == passwordField)>
     public ${column.javaType} get${column.fieldName?cap_first}() {
         return ${column.fieldName};
     }
@@ -70,9 +86,12 @@ public class ${table.className}Dto {
     }
 
 </#if>
+</#if>
 </#list>
 <#if hasRelationships>
 <#list table.relationships as rel>
+<#assign isRoleRel = (isUserDetails?? && isUserDetails && rel.fieldName == "roles")>
+<#if !isRoleRel>
 <#if rel.type == "MANY_TO_ONE" || rel.type == "ONE_TO_ONE">
     public <#list rel.targetTable?split("_") as part>${part?cap_first}</#list>Dto get${rel.fieldName?cap_first}() {
         return ${rel.fieldName};
@@ -91,6 +110,7 @@ public class ${table.className}Dto {
         this.${rel.fieldName} = ${rel.fieldName};
     }
 
+</#if>
 </#if>
 </#list>
 </#if>

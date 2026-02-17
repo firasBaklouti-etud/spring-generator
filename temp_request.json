@@ -1,12 +1,15 @@
 {
     "name": "ECommerceBackend",
     "packageName": "com.firas.ecommerce",
+    "databaseType": "mysql",
     "includeEntity": true,
     "includeRepository": true,
     "includeService": true,
     "includeController": true,
     "includeDto": true,
     "includeMapper": true,
+    "includeTests": true,
+    "includeDocker": true,
     "tables": [
         {
             "id": "1",
@@ -44,28 +47,6 @@
                     "mappedBy": "user"
                 }
             ]
-        },
-        {
-            "id": "2",
-            "name": "Role",
-            "className": "Role",
-            "columns": [
-                {
-                    "name": "id",
-                    "type": "BIGINT",
-                    "fieldName": "id",
-                    "javaType": "Long",
-                    "primaryKey": true
-                },
-                {
-                    "name": "name",
-                    "type": "VARCHAR(50)",
-                    "fieldName": "name",
-                    "javaType": "String",
-                    "unique": true
-                }
-            ],
-            "relationships": []
         },
         {
             "id": "3",
@@ -194,7 +175,7 @@
         "passwordField": "password",
         "roleStrategy": "ENTITY",
         "roleEntity": "Role",
-        "rbacMode": "STATIC",
+        "rbacMode": "DYNAMIC",
         "permissions": [
             "USER_READ",
             "USER_WRITE",
