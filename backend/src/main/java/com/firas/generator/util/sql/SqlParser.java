@@ -1,8 +1,10 @@
 package com.firas.generator.util.sql;
 
 import com.firas.generator.model.*;
-import com.firas.generator.util.sql.implementation.MysqlConnection;
-import com.firas.generator.util.sql.implementation.PostgresqlConnection;
+import com.firas.generator.stack.TypeMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.sql.*;
@@ -11,12 +13,23 @@ import java.util.*;
 @Component
 public class SqlParser {
 
+    private static final Logger log = LoggerFactory.getLogger(SqlParser.class);
+
+    private final SqlConnectionFactory sqlConnectionFactory;
+    private final TypeMapper typeMapper;
+
+    @Autowired
+    public SqlParser(SqlConnectionFactory sqlConnectionFactory, TypeMapper typeMapper) {
+        this.sqlConnectionFactory = sqlConnectionFactory;
+        this.typeMapper = typeMapper;
+    }
+
     public List<Table> parseSql(String sql) throws SQLException {
         return parseSql(sql, "mysql");
     }
 
     public List<Table> parseSql(String sql, String dialect) throws SQLException {
-        SqlConnection conn = SqlConnectionFactory.get(dialect);
+        SqlConnection conn = sqlConnectionFactory.get(dialect);
         return loadMetadata(conn.getConnection(sql));
     }
 
@@ -65,7 +78,7 @@ public class SqlParser {
                     String sqlType = rs.getString("TYPE_NAME");
                     col.setType(sqlType != null ? sqlType : "");
 
-                    col.setJavaType(mapJavaType(sqlType));
+                    col.setJavaType(typeMapper.mapSqlType(sqlType));
 
                     // Auto-increment detection
                     String autoInc = safe(() -> rs.getString("IS_AUTOINCREMENT"));
@@ -136,7 +149,9 @@ public class SqlParser {
                         }
                     }
                 }
-            } catch (Exception ignore) {}
+            } catch (Exception e) {
+                log.debug("Failed to load unique indexes for table: {}", table.getName(), e);
+            }
         }
 
         // ---------------------------------------------------------
@@ -283,21 +298,6 @@ public class SqlParser {
         return s + "s";
     }
 
-    private String mapJavaType(String type) {
-        if (type == null) return "String";
-        String t = type.toUpperCase();
-
-        if (t.contains("CHAR") || t.contains("TEXT") || t.contains("CLOB")) return "String";
-        if (t.contains("BIGINT")) return "Long";
-        if (t.equals("TINYINT") || t.equals("TINYINT(1)")) return "Boolean";
-        if (t.contains("INT")) return "Integer";
-        if (t.contains("DECIMAL") || t.contains("NUMERIC")) return "java.math.BigDecimal";
-        if (t.contains("DATE") || t.contains("TIME")) return "java.time.LocalDateTime";
-        if (t.contains("BLOB") || t.contains("BINARY")) return "byte[]";
-
-        return "String";
-    }
-
     private String fixSchema(DatabaseMetaData meta, String schema) {
         try {
             String product = meta.getDatabaseProductName().toLowerCase();
@@ -309,7 +309,7 @@ public class SqlParser {
         }
     }
 
-    private <T> T safe(Supplier<T> s) {
+    private <T> T safe(ThrowingSupplier<T> s) {
         try {
             return s.get();
         } catch (Exception e) {
@@ -317,7 +317,8 @@ public class SqlParser {
         }
     }
 
-    private interface Supplier<T> {
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
         T get() throws Exception;
     }
 }

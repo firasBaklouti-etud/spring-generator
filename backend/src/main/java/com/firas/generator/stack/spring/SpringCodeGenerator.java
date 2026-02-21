@@ -35,33 +35,38 @@ import java.util.stream.Collectors;
 public class SpringCodeGenerator implements CodeGenerator {
     
     private static final String TEMPLATE_DIR = "spring/";
-    
+
     private final TemplateService templateService;
-    
-    // Security configuration for controller generation
-    private SecurityConfig securityConfig;
-    
-    // Spring configuration for project structure
-    private SpringConfig springConfig;
-    
+
+    // Thread-safe configuration holders (scoped per request)
+    private final ThreadLocal<SecurityConfig> securityConfig = new ThreadLocal<>();
+
+    private final ThreadLocal<SpringConfig> springConfig = new ThreadLocal<>();
+
     public SpringCodeGenerator(TemplateService templateService) {
         this.templateService = templateService;
     }
-    
-    public void setSecurityConfig(SecurityConfig securityConfig) {
-        this.securityConfig = securityConfig;
+
+    public void setSecurityConfig(SecurityConfig config) {
+        this.securityConfig.set(config);
     }
-    
-    public void setSpringConfig(SpringConfig springConfig) {
-        this.springConfig = springConfig;
+
+    public void setSpringConfig(SpringConfig config) {
+        this.springConfig.set(config);
     }
-    
+
+    public void clearConfig() {
+        this.securityConfig.remove();
+        this.springConfig.remove();
+    }
+
     /**
      * Gets the current project structure from springConfig, or LAYERED as default.
      */
     private ProjectStructure getProjectStructure() {
-        if (springConfig != null && springConfig.getProjectStructure() != null) {
-            return springConfig.getProjectStructure();
+        SpringConfig config = springConfig.get();
+        if (config != null && config.getProjectStructure() != null) {
+            return config.getProjectStructure();
         }
         return ProjectStructure.LAYERED;
     }
@@ -193,15 +198,25 @@ public class SpringCodeGenerator implements CodeGenerator {
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "controller");
         
         // Add security configuration to controller model
-        if (securityConfig != null && securityConfig.isEnabled()) {
+        SecurityConfig secConfig = securityConfig.get();
+        if (secConfig != null && secConfig.isEnabled()) {
             model.put("securityEnabled", true);
-            
+
+            // Determine if annotations should be used
+            boolean useAnnotations = "ANNOTATION".equalsIgnoreCase(secConfig.getSecurityStyle());
+            model.put("useAnnotations", useAnnotations);
+
             // Filter security rules for this entity's endpoints
-            if (securityConfig.getRules() != null) {
-                String basePath = "/api/" + table.getClassName().toLowerCase();
-                List<SecurityRule> entityRules = securityConfig.getRules().stream()
-                    .filter(rule -> rule.getPath() != null && 
-                            (rule.getPath().startsWith(basePath + "/") || 
+            // Use pluralized name to match the Controller's @RequestMapping URL pattern
+            if (secConfig.getRules() != null) {
+                String resourceName = table.getClassName().toLowerCase();
+                if (!resourceName.endsWith("s")) {
+                    resourceName = resourceName + "s";
+                }
+                String basePath = "/api/" + resourceName;
+                List<SecurityRule> entityRules = secConfig.getRules().stream()
+                    .filter(rule -> rule.getPath() != null &&
+                            (rule.getPath().startsWith(basePath + "/") ||
                              rule.getPath().equals(basePath + "/**")))
                     .collect(Collectors.toList());
                 model.put("securityRules", entityRules);
@@ -220,23 +235,21 @@ public class SpringCodeGenerator implements CodeGenerator {
     public FilePreview generateDto(Table table, String packageName) {
         String effectivePackage = getEffectivePackage(packageName, table, "dto");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "dto");
-        
-        // TODO: Add Dto.ftl template for Spring
-        String content = "// DTO for " + table.getClassName() + "\n// TODO: Implement DTO template";
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Dto.ftl", model);
         String path = generatePath(packageName, table, "dto", "Dto", false);
-        
+
         return new FilePreview(path, content, "java");
     }
-    
+
     @Override
     public FilePreview generateMapper(Table table, String packageName) {
         String effectivePackage = getEffectivePackage(packageName, table, "mapper");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "mapper");
-        
-        // TODO: Add Mapper.ftl template for Spring
-        String content = "// Mapper for " + table.getClassName() + "\n// TODO: Implement Mapper template";
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Mapper.ftl", model);
         String path = generatePath(packageName, table, "mapper", "Mapper", false);
-        
+
         return new FilePreview(path, content, "java");
     }
     
@@ -259,10 +272,19 @@ public class SpringCodeGenerator implements CodeGenerator {
     public FilePreview generateControllerTest(Table table, String packageName) {
         String effectivePackage = getEffectivePackage(packageName, table, "controller");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "controller");
-        
+
+        // Add security configuration for test generation
+        SecurityConfig secConfig = securityConfig.get();
+        if (secConfig != null && secConfig.isEnabled()) {
+            model.put("securityEnabled", true);
+            model.put("authType", secConfig.getAuthenticationType());
+        } else {
+            model.put("securityEnabled", false);
+        }
+
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "ControllerTest.ftl", model);
         String path = generatePath(packageName, table, "controller", "ControllerTest", true);
-        
+
         return new FilePreview(path, content, "java");
     }
     
@@ -282,11 +304,16 @@ public class SpringCodeGenerator implements CodeGenerator {
         model.put("basePackageName", basePackageName);
         model.put("projectStructure", getProjectStructure().getId());
 
+        // Add effective packages for all layers (for cross-layer imports)
+        model.put("entityPackage", getEffectivePackage(basePackageName, table, "entity"));
+        model.put("repositoryPackage", getEffectivePackage(basePackageName, table, "repository"));
+        model.put("servicePackage", getEffectivePackage(basePackageName, table, "service"));
+        model.put("controllerPackage", getEffectivePackage(basePackageName, table, "controller"));
+        model.put("dtoPackage", getEffectivePackage(basePackageName, table, "dto"));
+        model.put("mapperPackage", getEffectivePackage(basePackageName, table, "mapper"));
+
         if (table.getMetadata() != null) {
-            System.out.println("DEBUG: Table " + table.getName() + " has metadata: " + table.getMetadata());
             model.putAll(table.getMetadata());
-        } else {
-            System.out.println("DEBUG: Table " + table.getName() + " has NULL metadata");
         }
         return model;
     }

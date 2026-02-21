@@ -105,6 +105,18 @@
 			<artifactId>jtoon</artifactId>
 			<version>1.0.6</version>
 		</dependency>
+		<!-- MCP Java SDK -->
+		<dependency>
+			<groupId>io.modelcontextprotocol.sdk</groupId>
+			<artifactId>mcp</artifactId>
+			<version>0.17.2</version>
+		</dependency>
+		<!-- MCP Spring WebMVC SSE Transport -->
+		<dependency>
+			<groupId>io.modelcontextprotocol.sdk</groupId>
+			<artifactId>mcp-spring-webmvc</artifactId>
+			<version>0.17.2</version>
+		</dependency>
 	</dependencies>
 
 	<build>

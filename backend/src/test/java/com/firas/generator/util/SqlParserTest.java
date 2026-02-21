@@ -4,22 +4,28 @@ import com.firas.generator.model.Column;
 import com.firas.generator.model.Table;
 import com.firas.generator.util.sql.SqlParser;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import java.nio.file.*;
 import java.util.*;
 
 import static junit.framework.TestCase.*;
 
+@RunWith(SpringRunner.class)
+@SpringBootTest
 public class SqlParserTest {
 
-
+    @Autowired
+    private SqlParser sqlParser;
 
     @Test
     public void testSqlParserWithHardSchema() throws Exception {
         // Load the hard schema SQL (place the file at src/test/resources/hard_schema.sql)
         String sql = Files.readString(Paths.get("src/test/resources/hard_schema.sql"));
 
-        SqlParser sqlParser = new SqlParser();
         List<Table> tables = sqlParser.parseSql(sql);
 
         // Basic sanity checks

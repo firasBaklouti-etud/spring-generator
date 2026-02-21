@@ -11,9 +11,10 @@ import com.firas.generator.stack.*;
 import com.firas.generator.util.ZipUtils;
 import java.io.File;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,7 +23,8 @@ import java.util.*;
 
 @Component
 public class SpringStackProvider implements StackProvider {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(SpringStackProvider.class);
     private static final String TEMPLATE_DIR = "spring/";
     
     private final TemplateService templateService;
@@ -70,16 +72,20 @@ public class SpringStackProvider implements StackProvider {
     public List<FilePreview> generateProject(ProjectRequest request) throws IOException {
         // Apply type mappings to all columns
         applyTypeMappings(request);
-        
+
         List<FilePreview> files = new ArrayList<>();
-        
+
         // Set Spring config on code generator for project structure support
         codeGenerator.setSpringConfig(request.getEffectiveSpringConfig());
+
+        try {
         
         // Generate project structure files
         files.add(generatePom(request));
         files.add(generateMainClass(request));
         files.add(generateApplicationProperties(request));
+        files.add(generateApplicationDevProperties(request));
+        files.add(generateGitignore());
 
         // Handle security configuration specific table modifications
         if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled() && request.getTables() != null) {
@@ -88,10 +94,9 @@ public class SpringStackProvider implements StackProvider {
                 .filter(table -> table.getName().equalsIgnoreCase(security.getPrincipalEntity()))
                 .findFirst()
                 .ifPresent(table -> {
-                    System.out.println("FOUND Principal Table: " + table.getName());
+                    log.debug("Found principal table: {}", table.getName());
                     // 1. Inject Metadata for Entity.ftl
                     table.addMetadata("isUserDetails", true);
-                    System.out.println("Injected isUserDetails=true for table " + table.getName());
                     table.addMetadata("usernameField", security.getUsernameField());
                     table.addMetadata("passwordField", security.getPasswordField());
                     table.addMetadata("roleStrategy", security.getRoleStrategy());
@@ -102,12 +107,10 @@ public class SpringStackProvider implements StackProvider {
                     // 2. Ensure Password Column Exists
                     boolean hasPassword = table.getColumns().stream()
                             .anyMatch(c -> c.getFieldName().equals(security.getPasswordField()));
-                    
-                    System.out.println("Has Password Field '" + security.getPasswordField() + "'? " + hasPassword);
 
                     if (!hasPassword) {
                         try {
-                            System.out.println("Injecting missing password field '" + security.getPasswordField() + "' into principal entity '" + table.getName() + "'");
+                            log.debug("Injecting missing password field '{}' into principal entity '{}'", security.getPasswordField(), table.getName());
                             com.firas.generator.model.Column passwordCol = new com.firas.generator.model.Column();
                             passwordCol.setName(security.getPasswordField()); // DB name
                             passwordCol.setFieldName(security.getPasswordField());
@@ -115,35 +118,57 @@ public class SpringStackProvider implements StackProvider {
                             passwordCol.setType("VARCHAR(255)");
                             passwordCol.setNullable(false);
                             table.addColumn(passwordCol);
-                            System.out.println("Password field injected. Column count now: " + table.getColumns().size());
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            log.error("Failed to inject password field", e);
+                        }
+                    }
+
+                    // 2.5 Ensure Password Reset Columns Exist
+                    if (security.isPasswordResetEnabled()) {
+                        String tokenField = security.getPasswordResetTokenField() != null ? security.getPasswordResetTokenField() : "resetToken";
+                        String expiryField = security.getPasswordResetExpiryField() != null ? security.getPasswordResetExpiryField() : "resetTokenExpiry";
+                        
+                        boolean hasToken = table.getColumns().stream()
+                                .anyMatch(c -> c.getFieldName().equals(tokenField));
+                        if (!hasToken) {
+                            com.firas.generator.model.Column tokenCol = new com.firas.generator.model.Column();
+                            tokenCol.setName(tokenField.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase());
+                            tokenCol.setFieldName(tokenField);
+                            tokenCol.setJavaType("String");
+                            tokenCol.setType("VARCHAR(255)");
+                            tokenCol.setNullable(true);
+                            table.addColumn(tokenCol);
+                        }
+                        
+                        boolean hasExpiry = table.getColumns().stream()
+                                .anyMatch(c -> c.getFieldName().equals(expiryField));
+                        if (!hasExpiry) {
+                            com.firas.generator.model.Column expiryCol = new com.firas.generator.model.Column();
+                            expiryCol.setName(expiryField.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase());
+                            expiryCol.setFieldName(expiryField);
+                            // We use LocalDateTime so it matches what PasswordResetService expects
+                            expiryCol.setJavaType("LocalDateTime");
+                            expiryCol.setType("TIMESTAMP");
+                            expiryCol.setNullable(true);
+                            table.addColumn(expiryCol);
                         }
                     }
 
                     // 3. Handle Role Entity Strategy M:N Injection
                     if ("ENTITY".equalsIgnoreCase(security.getRoleStrategy())) {
                         String roleEntityName = security.getRoleEntity();
-                        System.out.println("Checking M:N injection for role entity: " + roleEntityName);
-                        
+
                         Table roleTable = request.getTables().stream()
                                 .filter(t -> t.getName().equalsIgnoreCase(roleEntityName))
                                 .findFirst()
                                 .orElse(null);
 
                         if (roleTable != null) {
-                            System.out.println("Found Role Table: " + roleTable.getName());
-                            // Check for existing relationship
-                            System.out.println("Current relationships for " + table.getName() + ":");
-                            table.getRelationships().forEach(r -> System.out.println(" - Target: " + r.getTargetClassName()));
-
                             boolean hasRelation = table.getRelationships().stream()
                                     .anyMatch(r -> r.getTargetClassName().equalsIgnoreCase(roleTable.getClassName()));
-                            
-                            System.out.println("Has existing relation to Role? " + hasRelation);
 
                             if (!hasRelation) {
-                                System.out.println("Injecting missing M:N relationship between '" + table.getName() + "' and '" + roleTable.getName() + "'");
+                                log.debug("Injecting M:N relationship between '{}' and '{}'", table.getName(), roleTable.getName());
                                 // Inject logical relationship (Owner side on User)
                                 com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
                                 userToRole.setType(RelationshipType.MANY_TO_MANY);
@@ -155,25 +180,24 @@ public class SpringStackProvider implements StackProvider {
                                 userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
                                 userToRole.setTargetColumn(roleTable.getName().toLowerCase() + "_id");
                                 table.addRelationship(userToRole);
-                                System.out.println("Relationship injected. New count: " + table.getRelationships().size());
                             }
                         } else {
-                            System.out.println("WARN: Role entity '" + roleEntityName + "' not found. Downgrading to STRING strategy.");
+                            log.warn("Role entity '{}' not found. Downgrading to STRING strategy.", roleEntityName);
                             table.addMetadata("roleStrategy", "STRING");
                         }
                     }
 
                     // 4. Handle Dynamic RBAC Mode M:N Injection
                     if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
-                        System.out.println("Setting up Dynamic RBAC mode for principal entity: " + table.getName());
+                        log.debug("Setting up Dynamic RBAC mode for principal entity: {}", table.getName());
                         table.addMetadata("roleEntity", "Role"); // Dynamic mode always uses generated Role entity
-                        
+
                         // Check for existing relationship to Role (exact match for auto-generated entity)
                         boolean hasRelation = table.getRelationships().stream()
                                 .anyMatch(r -> "Role".equals(r.getTargetClassName()));
-                        
+
                         if (!hasRelation) {
-                            System.out.println("Injecting M:N relationship to auto-generated Role entity");
+                            log.debug("Injecting M:N relationship to auto-generated Role entity");
                             com.firas.generator.model.Relationship userToRole = new com.firas.generator.model.Relationship();
                             userToRole.setType(RelationshipType.MANY_TO_MANY);
                             userToRole.setFieldName("roles");
@@ -184,7 +208,6 @@ public class SpringStackProvider implements StackProvider {
                             userToRole.setSourceColumn(table.getName().toLowerCase() + "_id");
                             userToRole.setTargetColumn("role_id");
                             table.addRelationship(userToRole);
-                            System.out.println("Dynamic Role relationship injected. New count: " + table.getRelationships().size());
                         }
                     }
                 });
@@ -194,13 +217,27 @@ public class SpringStackProvider implements StackProvider {
         if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled()) {
             files.addAll(generateExtendedSecurityFiles(request));
             files.add(generateSecurityConfig(request));
-            
+
             // Set security config on code generator for @PreAuthorize annotations
             codeGenerator.setSecurityConfig(request.getSecurityConfig());
         }
-        
+
+        // Generate CORS configuration
+        files.add(generateCorsConfig(request));
+
+        // Generate Global Exception Handler
+        files.add(generateGlobalExceptionHandler(request));
+
+        // Generate OpenAPI/Swagger configuration
+        files.add(generateOpenApiConfig(request));
+
+        // Generate E2E HTTP test file
+        files.add(generateE2EHttp(request));
+
         // Generate CRUD code if tables are provided
         if (request.getTables() != null && !request.getTables().isEmpty()) {
+            boolean includeDto = request.isIncludeDto() || request.isIncludeController() || request.isIncludeService();
+            boolean includeMapper = request.isIncludeMapper() || includeDto;
             for (Table table : request.getTables()) {
                 if (table.isJoinTable()) {
                     continue; // Skip join tables
@@ -218,10 +255,10 @@ public class SpringStackProvider implements StackProvider {
                 if (request.isIncludeController()) {
                     files.add(codeGenerator.generateController(table, request.getPackageName()));
                 }
-                if (request.isIncludeDto()) {
+                if (includeDto) {
                     files.add(codeGenerator.generateDto(table, request.getPackageName()));
                 }
-                if (request.isIncludeMapper()) {
+                if (includeMapper) {
                     files.add(codeGenerator.generateMapper(table, request.getPackageName()));
                 }
                 
@@ -241,10 +278,19 @@ public class SpringStackProvider implements StackProvider {
         if (request.isIncludeDocker()) {
             files.addAll(generateDockerFiles(request));
         }
-        
+
+        // Generate migration files if enabled
+        SpringConfig config = request.getEffectiveSpringConfig();
+        if (config.getMigrationTool() != null && !"none".equalsIgnoreCase(config.getMigrationTool())) {
+            files.addAll(generateMigrationFiles(request, config));
+        }
+
         return files;
+        } finally {
+            codeGenerator.clearConfig();
+        }
     }
-    
+
     @Override
     public byte[] generateProjectZip(ProjectRequest request) throws IOException {
         List<FilePreview> files = generateProject(request);
@@ -258,28 +304,187 @@ public class SpringStackProvider implements StackProvider {
      */
     private FilePreview generatePom(ProjectRequest request) {
         SpringConfig config = request.getEffectiveSpringConfig();
-        
+
         Map<String, Object> model = new HashMap<>();
         model.put("request", request);
         model.put("springConfig", config);
-        
+
         List<DependencyMetadata> dependencies = request.getDependencies();
         if (dependencies == null) {
             dependencies = new ArrayList<>();
         }
 
+        // Normalize dependency metadata before template rendering
+        for (DependencyMetadata dep : dependencies) {
+            if (dep.getVersion() != null && dep.getVersion().isBlank()) {
+                dep.setVersion(null);
+            }
+            if (dep.getArtifactId() != null && dep.getArtifactId().equals("spring-boot-starter-webmvc")) {
+                dep.setArtifactId("spring-boot-starter-web");
+                if (dep.getGroupId() == null || dep.getGroupId().isBlank()) {
+                    dep.setGroupId("org.springframework.boot");
+                }
+                if (dep.getId() == null || dep.getId().isBlank()) {
+                    dep.setId("web");
+                }
+            }
+        }
+
+        // Auto-include essential dependencies based on project features
+        boolean hasTables = request.getTables() != null && !request.getTables().isEmpty();
+        boolean hasWeb = dependencies.stream().anyMatch(dep -> "web".equals(dep.getId())
+                || "spring-boot-starter-web".equals(dep.getArtifactId()));
+        boolean hasJpa = dependencies.stream().anyMatch(dep -> "data-jpa".equals(dep.getId())
+                || "spring-boot-starter-data-jpa".equals(dep.getArtifactId()));
+        boolean hasSecurity = dependencies.stream().anyMatch(dep -> "security".equals(dep.getId())
+                || "spring-boot-starter-security".equals(dep.getArtifactId()));
+        boolean hasValidation = dependencies.stream().anyMatch(dep -> "validation".equals(dep.getId())
+                || "spring-boot-starter-validation".equals(dep.getArtifactId()));
+
+        if (request.isIncludeController() && hasTables && !hasWeb) {
+            DependencyMetadata webDep = new DependencyMetadata();
+            webDep.setId("web");
+            webDep.setGroupId("org.springframework.boot");
+            webDep.setArtifactId("spring-boot-starter-web");
+            dependencies.add(webDep);
+        }
+        if (hasTables && !hasJpa) {
+            DependencyMetadata jpaDep = new DependencyMetadata();
+            jpaDep.setId("data-jpa");
+            jpaDep.setGroupId("org.springframework.boot");
+            jpaDep.setArtifactId("spring-boot-starter-data-jpa");
+            dependencies.add(jpaDep);
+        }
+        if (request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled() && !hasSecurity) {
+            DependencyMetadata secDep = new DependencyMetadata();
+            secDep.setId("security");
+            secDep.setGroupId("org.springframework.boot");
+            secDep.setArtifactId("spring-boot-starter-security");
+            dependencies.add(secDep);
+        }
+        if (hasTables && !hasValidation) {
+            DependencyMetadata valDep = new DependencyMetadata();
+            valDep.setId("validation");
+            valDep.setGroupId("org.springframework.boot");
+            valDep.setArtifactId("spring-boot-starter-validation");
+            dependencies.add(valDep);
+        }
+
+        // Auto-include database driver based on databaseType
+        if (hasTables && request.getDatabaseType() != null) {
+            boolean hasDriver = dependencies.stream().anyMatch(dep -> {
+                String aid = dep.getArtifactId();
+                return aid != null && (aid.contains("mysql") || aid.contains("postgresql")
+                        || aid.contains("mariadb") || aid.contains("h2")
+                        || aid.contains("sqlserver") || aid.contains("sqlite"));
+            });
+            if (!hasDriver) {
+                DependencyMetadata driverDep = new DependencyMetadata();
+                driverDep.setScope("runtime");
+                switch (request.getDatabaseType().toLowerCase()) {
+                    case "mysql" -> {
+                        driverDep.setId("mysql");
+                        driverDep.setGroupId("com.mysql");
+                        driverDep.setArtifactId("mysql-connector-j");
+                    }
+                    case "postgresql" -> {
+                        driverDep.setId("postgresql");
+                        driverDep.setGroupId("org.postgresql");
+                        driverDep.setArtifactId("postgresql");
+                    }
+                    case "mariadb" -> {
+                        driverDep.setId("mariadb");
+                        driverDep.setGroupId("org.mariadb.jdbc");
+                        driverDep.setArtifactId("mariadb-java-client");
+                    }
+                    case "h2" -> {
+                        driverDep.setId("h2");
+                        driverDep.setGroupId("com.h2database");
+                        driverDep.setArtifactId("h2");
+                    }
+                    case "sqlserver" -> {
+                        driverDep.setId("sqlserver");
+                        driverDep.setGroupId("com.microsoft.sqlserver");
+                        driverDep.setArtifactId("mssql-jdbc");
+                    }
+                    default -> driverDep = null;
+                }
+                if (driverDep != null) {
+                    dependencies.add(driverDep);
+                }
+            }
+        }
+
+        // Auto-include H2 for dev profile (test scope) if not already present
+        if (hasTables) {
+            boolean hasH2 = dependencies.stream().anyMatch(dep -> "h2".equals(dep.getId())
+                    || (dep.getArtifactId() != null && dep.getArtifactId().contains("h2")));
+            if (!hasH2) {
+                DependencyMetadata h2Dep = new DependencyMetadata();
+                h2Dep.setId("h2");
+                h2Dep.setGroupId("com.h2database");
+                h2Dep.setArtifactId("h2");
+                h2Dep.setScope("runtime");
+                dependencies.add(h2Dep);
+            }
+        }
+
+        // Auto-include springdoc-openapi for API documentation
+        boolean hasSpringdoc = dependencies.stream().anyMatch(dep ->
+                dep.getArtifactId() != null && dep.getArtifactId().contains("springdoc"));
+        if (!hasSpringdoc) {
+            DependencyMetadata springdocDep = new DependencyMetadata();
+            springdocDep.setId("springdoc-openapi");
+            springdocDep.setGroupId("org.springdoc");
+            springdocDep.setArtifactId("springdoc-openapi-starter-webmvc-ui");
+            // Choose compatible springdoc version based on Boot version
+            // springdoc 2.8.x requires Spring Boot 3.4+ (Spring Framework 6.2+)
+            // springdoc 2.3.0 works with Spring Boot 3.1-3.3
+            String bootVer = request.getBootVersion();
+            String springdocVersion = "2.3.0"; // Safe default for Boot 3.2.x
+            if (bootVer != null) {
+                try {
+                    String[] parts = bootVer.split("\\.");
+                    int minor = Integer.parseInt(parts[1]);
+                    if (minor >= 4) {
+                        springdocVersion = "2.8.4"; // Boot 3.4+
+                    }
+                } catch (Exception ignored) {}
+            }
+            springdocDep.setVersion(springdocVersion);
+            dependencies.add(springdocDep);
+        }
+
         model.put("dependencies", dependencies);
-        
+
         // Check if Lombok is in dependencies
         boolean hasLombok = dependencies.stream()
                 .anyMatch(dep -> "lombok".equals(dep.getId()));
         model.put("hasLombok", hasLombok);
-        
+
         // Check if JWT authentication is enabled
-        boolean hasJwt = request.getSecurityConfig() != null 
+        boolean hasJwt = request.getSecurityConfig() != null
                 && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
         model.put("hasJwt", hasJwt);
-        
+
+        // Check for social logins
+        boolean hasSocialLogins = request.getSecurityConfig() != null
+                && request.getSecurityConfig().getSocialLogins() != null
+                && !request.getSecurityConfig().getSocialLogins().isEmpty();
+        model.put("hasSocialLogins", hasSocialLogins);
+
+        // Check for Keycloak
+        boolean hasKeycloak = request.getSecurityConfig() != null
+                && (request.getSecurityConfig().isKeycloakEnabled()
+                    || "KEYCLOAK_RS".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType())
+                    || "KEYCLOAK_OAUTH".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType()));
+        model.put("hasKeycloak", hasKeycloak);
+
+        // Check for password reset
+        boolean hasPasswordReset = request.getSecurityConfig() != null
+                && request.getSecurityConfig().isPasswordResetEnabled();
+        model.put("hasPasswordReset", hasPasswordReset);
+
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "pom.xml.ftl", model);
         return new FilePreview("pom.xml", content, "xml");
     }
@@ -307,14 +512,82 @@ public class SpringStackProvider implements StackProvider {
     private FilePreview generateApplicationProperties(ProjectRequest request) {
         Map<String, Object> model = new HashMap<>();
         model.put("request", request);
-        
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
         // Check if JWT authentication is enabled
-        boolean hasJwt = request.getSecurityConfig() != null 
+        boolean hasJwt = request.getSecurityConfig() != null
                 && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
         model.put("hasJwt", hasJwt);
         
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.properties.ftl", model);
         return new FilePreview("src/main/resources/application.properties", content, "properties");
+    }
+
+    /**
+     * Generates the application-dev.properties file with H2 in-memory database for development.
+     */
+    private FilePreview generateApplicationDevProperties(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.properties.ftl", model);
+        return new FilePreview("src/main/resources/application-dev.properties", content, "properties");
+    }
+
+    /**
+     * Generates the .gitignore file.
+     */
+    private FilePreview generateGitignore() {
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + ".gitignore.ftl", new HashMap<>());
+        return new FilePreview(".gitignore", content, "text");
+    }
+
+    /**
+     * Generates the GlobalExceptionHandler class.
+     */
+    private FilePreview generateGlobalExceptionHandler(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        boolean securityEnabled = request.getSecurityConfig() != null && request.getSecurityConfig().isEnabled();
+        model.put("securityEnabled", securityEnabled);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "GlobalExceptionHandler.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/GlobalExceptionHandler.java";
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates the OpenAPI/Swagger configuration class.
+     */
+    private FilePreview generateOpenApiConfig(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        model.put("request", request);
+
+        // Check if JWT authentication is enabled for Swagger JWT integration
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "OpenApiConfig.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/OpenApiConfig.java";
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates the CORS configuration class.
+     */
+    private FilePreview generateCorsConfig(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "CorsConfig.ftl", model);
+        String packagePath = request.getPackageName().replace(".", "/");
+        String path = "src/main/java/" + packagePath + "/config/CorsConfig.java";
+        return new FilePreview(path, content, "java");
     }
 
     /**
@@ -384,7 +657,7 @@ public class SpringStackProvider implements StackProvider {
             try {
                 FileUtils.deleteDirectory(tempDir.toFile());
             } catch (IOException e) {
-                System.out.println("WARN: Failed to clean up temp directory: " + tempDir + " " + e.getMessage());
+                log.warn("Failed to clean up temp directory: {}", tempDir, e);
             }
         }
 
@@ -402,7 +675,8 @@ public class SpringStackProvider implements StackProvider {
         String appConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/ApplicationConfig.ftl", model);
         files.add(new FilePreview(basePath + "config/ApplicationConfig.java", appConfigContent, "java"));
 
-        // 2. CustomUserDetailsService (If Principal set)
+        // 2. CustomUserDetailsService (If Principal set and not using static fallback)
+        boolean useStaticFallback = security.isStaticUserFallback() && security.getPrincipalEntity() == null;
         if (security.getPrincipalEntity() != null) {
             Map<String, Object> tdsModel = new HashMap<>();
             tdsModel.put("packageName", request.getPackageName());
@@ -410,6 +684,13 @@ public class SpringStackProvider implements StackProvider {
             tdsModel.put("usernameField", security.getUsernameField());
             String tdsContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/CustomUserDetailsService.ftl", tdsModel);
             files.add(new FilePreview(basePath + "service/auth/CustomUserDetailsService.java", tdsContent, "java"));
+        } else if (useStaticFallback) {
+            // Generate InMemoryUserConfig for static user fallback
+            Map<String, Object> fallbackModel = new HashMap<>();
+            fallbackModel.put("packageName", request.getPackageName());
+            fallbackModel.put("definedRoles", security.getDefinedRoles());
+            String fallbackContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/InMemoryUserConfig.ftl", fallbackModel);
+            files.add(new FilePreview(basePath + "security/InMemoryUserConfig.java", fallbackContent, "java"));
         }
 
         // 3. Static RBAC Mode: Generate Permission and Role Enums
@@ -428,20 +709,63 @@ public class SpringStackProvider implements StackProvider {
             files.add(new FilePreview(basePath + "security/Role.java", roleContent, "java"));
         }
 
-        // 4. Dynamic RBAC Mode: Generate Role JPA Entity
+        // 4. Dynamic RBAC Mode: Generate Role JPA Entity + Admin API
         if ("DYNAMIC".equalsIgnoreCase(security.getRbacMode())) {
             Map<String, Object> rbacModel = new HashMap<>();
             rbacModel.put("packageName", request.getPackageName());
-            
+
             // Generate Role.java JPA entity (with @ElementCollection for permissions)
             String roleEntityContent = templateService.processTemplateToString(TEMPLATE_DIR + "RoleEntity.ftl", rbacModel);
             files.add(new FilePreview(basePath + "entity/Role.java", roleEntityContent, "java"));
-            
+
             // Generate RoleRepository.java
             Map<String, Object> repoModel = new HashMap<>();
             repoModel.put("packageName", request.getPackageName());
             String roleRepoContent = generateRoleRepository(request.getPackageName());
             files.add(new FilePreview(basePath + "repository/RoleRepository.java", roleRepoContent, "java"));
+
+            // Admin API: DataInitializer, RoleDto, RoleService, RoleController, UserRoleController
+            Map<String, Object> adminModel = new HashMap<>();
+            adminModel.put("packageName", request.getPackageName());
+            adminModel.put("security", security);
+
+            // Determine principal entity PK type for UserRoleController
+            String pkType = "Long"; // default
+            if (security.getPrincipalEntity() != null && request.getTables() != null) {
+                Table principalTable = request.getTables().stream()
+                    .filter(t -> t.getName().equalsIgnoreCase(security.getPrincipalEntity()))
+                    .findFirst()
+                    .orElse(null);
+                if (principalTable != null) {
+                    adminModel.put("principalTable", principalTable);
+                    pkType = principalTable.getColumns().stream()
+                        .filter(c -> c.isPrimaryKey())
+                        .map(c -> c.getJavaType())
+                        .findFirst()
+                        .orElse("Long");
+                }
+            }
+            adminModel.put("pkType", pkType);
+
+            // DataInitializer - seeds default roles and admin user
+            String dataInitContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/DataInitializer.ftl", adminModel);
+            files.add(new FilePreview(basePath + "config/DataInitializer.java", dataInitContent, "java"));
+
+            // RoleDto
+            String roleDtoContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleDto.ftl", adminModel);
+            files.add(new FilePreview(basePath + "dto/RoleDto.java", roleDtoContent, "java"));
+
+            // RoleService
+            String roleServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleService.ftl", adminModel);
+            files.add(new FilePreview(basePath + "service/RoleService.java", roleServiceContent, "java"));
+
+            // RoleController (admin API for role CRUD)
+            String roleControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RoleController.ftl", adminModel);
+            files.add(new FilePreview(basePath + "controller/RoleController.java", roleControllerContent, "java"));
+
+            // UserRoleController (admin API for user-role assignments)
+            String userRoleControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/UserRoleController.ftl", adminModel);
+            files.add(new FilePreview(basePath + "controller/UserRoleController.java", userRoleControllerContent, "java"));
         }
 
         // 5. JWT Components
@@ -450,6 +774,17 @@ public class SpringStackProvider implements StackProvider {
             jwtModel.put("request", request);
             jwtModel.put("packageName", request.getPackageName());
             jwtModel.put("security", security);
+
+            // Find principal table for dynamic template generation (RegisterRequest, AuthController)
+            if (security.getPrincipalEntity() != null && request.getTables() != null) {
+                Table principalTable = request.getTables().stream()
+                    .filter(t -> t.getName().equalsIgnoreCase(security.getPrincipalEntity()))
+                    .findFirst()
+                    .orElse(null);
+                if (principalTable != null) {
+                    jwtModel.put("principalTable", principalTable);
+                }
+            }
             
             // JwtUtil
             String jwtUtilContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/JwtUtil.ftl", jwtModel);
@@ -472,6 +807,61 @@ public class SpringStackProvider implements StackProvider {
             // Auth Controller
             String authControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthController.ftl", jwtModel);
             files.add(new FilePreview(basePath + "controller/AuthController.java", authControllerContent, "java"));
+        }
+
+        // 6. Password Reset (if enabled)
+        if (security.isPasswordResetEnabled() && security.getPrincipalEntity() != null) {
+            Map<String, Object> resetModel = new HashMap<>();
+            resetModel.put("packageName", request.getPackageName());
+            resetModel.put("principalEntity", security.getPrincipalEntity());
+            resetModel.put("usernameField", security.getUsernameField());
+            resetModel.put("passwordField", security.getPasswordField());
+            resetModel.put("passwordResetTokenField", security.getPasswordResetTokenField() != null ? security.getPasswordResetTokenField() : "resetToken");
+            resetModel.put("passwordResetExpiryField", security.getPasswordResetExpiryField() != null ? security.getPasswordResetExpiryField() : "resetTokenExpiry");
+
+            String resetServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/PasswordResetService.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/PasswordResetService.java", resetServiceContent, "java"));
+
+            String resetControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/PasswordResetController.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/PasswordResetController.java", resetControllerContent, "java"));
+
+            String mailServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/MailService.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/MailService.java", mailServiceContent, "java"));
+        }
+
+        // 7. Refresh Token Persistence (if enabled)
+        if (security.isRefreshTokenPersisted() && security.getPrincipalEntity() != null) {
+            Map<String, Object> refreshModel = new HashMap<>();
+            refreshModel.put("packageName", request.getPackageName());
+            refreshModel.put("principalEntity", security.getPrincipalEntity());
+
+            String refreshEntityContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenEntity.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshToken.java", refreshEntityContent, "java"));
+
+            String refreshRepoContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenRepository.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshTokenRepository.java", refreshRepoContent, "java"));
+
+            String refreshServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenService.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshTokenService.java", refreshServiceContent, "java"));
+        }
+
+        // 8. Social Login Support (if any social providers configured)
+        boolean hasSocialLogins = security.getSocialLogins() != null && !security.getSocialLogins().isEmpty();
+        if (hasSocialLogins && security.getPrincipalEntity() != null) {
+            Map<String, Object> socialModel = new HashMap<>();
+            socialModel.put("packageName", request.getPackageName());
+            socialModel.put("principalEntity", security.getPrincipalEntity());
+            socialModel.put("usernameField", security.getUsernameField());
+            socialModel.put("passwordField", security.getPasswordField());
+
+            String oauthServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2UserService.ftl", socialModel);
+            files.add(new FilePreview(basePath + "security/CustomOAuth2UserService.java", oauthServiceContent, "java"));
+
+            // Social auth controller (for JWT token exchange after OAuth2 callback)
+            if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
+                String socialControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SocialAuthController.ftl", socialModel);
+                files.add(new FilePreview(basePath + "controller/SocialAuthController.java", socialControllerContent, "java"));
+            }
         }
 
         return files;
@@ -526,6 +916,31 @@ public class SpringStackProvider implements StackProvider {
     }
 
     /**
+     * Generates database migration files (Flyway or Liquibase).
+     */
+    private List<FilePreview> generateMigrationFiles(ProjectRequest request, SpringConfig springConfig) {
+        List<FilePreview> files = new ArrayList<>();
+        String migrationTool = springConfig.getMigrationTool();
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("tables", request.getTables() != null ? request.getTables() : new ArrayList<>());
+        model.put("request", request);
+
+        if ("flyway".equalsIgnoreCase(migrationTool)) {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "migration/V1__init_schema.sql.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/migration/V1__init_schema.sql", content, "sql"));
+        } else if ("liquibase".equalsIgnoreCase(migrationTool)) {
+            String masterContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/db.changelog-master.xml.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/changelog/db.changelog-master.xml", masterContent, "xml"));
+
+            String changesetContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/001-init-schema.xml.ftl", model);
+            files.add(new FilePreview("src/main/resources/db/changelog/001-init-schema.xml", changesetContent, "xml"));
+        }
+
+        return files;
+    }
+
+    /**
      * Generates a simple RoleRepository for Dynamic RBAC mode.
      */
     private String generateRoleRepository(String packageName) {
@@ -539,4 +954,13 @@ public class SpringStackProvider implements StackProvider {
                "    Optional<Role> findByName(String name);\n" +
                "}\n";
     }
-}
+    /**
+     * Generates an e2e.http file for testing the endpoints.
+     */
+    private FilePreview generateE2EHttp(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "e2e.http.ftl", model);
+        return new FilePreview("src/test/e2e.http", content, "http");
+    }}

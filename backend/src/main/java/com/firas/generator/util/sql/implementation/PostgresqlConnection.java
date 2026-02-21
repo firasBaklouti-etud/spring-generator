@@ -1,17 +1,28 @@
 package com.firas.generator.util.sql.implementation;
 
 import com.firas.generator.util.sql.SqlConnection;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+@Component
 public class PostgresqlConnection implements SqlConnection {
-    private final String dbName = System.getenv("POSTGRESQL_DB_NAME");
-    private final String user   = System.getenv("POSTGRESQL_DB_USER");
-    private final String pass   = System.getenv("POSTGRESQL_DB_PASSWORD");
-    private final String host   = System.getenv("POSTGRESQL_DB_HOST");
+
+    @Value("${postgresql.database}")
+    private String dbName;
+
+    @Value("${postgresql.user}")
+    private String user;
+
+    @Value("${postgresql.password}")
+    private String pass;
+
+    @Value("${postgresql.host}")
+    private String host;
 
     @Override
     public Connection getConnection(String sql) throws SQLException {

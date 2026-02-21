@@ -21,13 +21,13 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
 		</dependency>
-        
+
         <#if dependencies?? && (dependencies?size > 0)>
         <#list dependencies as dep>
         <dependency>
             <groupId>${dep.groupId}</groupId>
             <artifactId>${dep.artifactId}</artifactId>
-            <#if dep.version??>
+			<#if dep.version?has_content>
             <version>${dep.version}</version>
             </#if>
             <#if dep.scope??>
@@ -63,10 +63,64 @@
 			<scope>runtime</scope>
 		</dependency>
 		</#if>
+
+		<#-- Social Login / OAuth2 Client -->
+		<#if hasSocialLogins?? && hasSocialLogins>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-client</artifactId>
+		</dependency>
+		</#if>
+
+		<#-- Keycloak Resource Server -->
+		<#if hasKeycloak?? && hasKeycloak>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		</#if>
+
+		<#-- Password Reset (Mail) -->
+		<#if hasPasswordReset?? && hasPasswordReset>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		</#if>
+
+		<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "flyway">
+		<!-- Flyway Database Migrations -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<#if request.databaseType?? && (request.databaseType == "mysql" || request.databaseType == "mariadb")>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-mysql</artifactId>
+		</dependency>
+		</#if>
+		</#if>
+		<#if springConfig?? && springConfig.migrationTool?? && springConfig.migrationTool == "liquibase">
+		<!-- Liquibase Database Migrations -->
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+		</#if>
 	</dependencies>
 
 	<build>
 		<plugins>
+			<#if request.javaVersion?? && request.javaVersion == "23">
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
+				</configuration>
+			</plugin>
+			</#if>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
