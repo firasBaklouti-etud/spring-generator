@@ -850,6 +850,7 @@ public class SpringStackProvider implements StackProvider {
         if (hasSocialLogins && security.getPrincipalEntity() != null) {
             Map<String, Object> socialModel = new HashMap<>();
             socialModel.put("packageName", request.getPackageName());
+            socialModel.put("security", security);
             socialModel.put("principalEntity", security.getPrincipalEntity());
             socialModel.put("usernameField", security.getUsernameField());
             socialModel.put("passwordField", security.getPasswordField());
@@ -857,11 +858,94 @@ public class SpringStackProvider implements StackProvider {
             String oauthServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2UserService.ftl", socialModel);
             files.add(new FilePreview(basePath + "security/CustomOAuth2UserService.java", oauthServiceContent, "java"));
 
+            // OAuth2LoginConfig (client registration for social providers)
+            String oauthConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2LoginConfig.ftl", socialModel);
+            files.add(new FilePreview(basePath + "config/OAuth2LoginConfig.java", oauthConfigContent, "java"));
+
             // Social auth controller (for JWT token exchange after OAuth2 callback)
             if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
                 String socialControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SocialAuthController.ftl", socialModel);
                 files.add(new FilePreview(basePath + "controller/SocialAuthController.java", socialControllerContent, "java"));
             }
+        }
+
+        // 9. Form-Based Login components (if FORM_LOGIN auth type)
+        if ("FORM_LOGIN".equalsIgnoreCase(security.getAuthenticationType())) {
+            Map<String, Object> formModel = new HashMap<>();
+            formModel.put("packageName", request.getPackageName());
+            formModel.put("security", security);
+
+            // FormLoginSecurityConfig (overrides default SecurityConfig for form-based auth)
+            String formSecConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/FormLoginSecurityConfig.ftl", formModel);
+            files.add(new FilePreview(basePath + "config/FormLoginSecurityConfig.java", formSecConfigContent, "java"));
+
+            // MVC Authentication Controller (login/logout pages)
+            String authMvcContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthenticationController.ftl", formModel);
+            files.add(new FilePreview(basePath + "controller/AuthenticationController.java", authMvcContent, "java"));
+
+            // Thymeleaf login template
+            String loginHtmlContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/login.html.ftl", formModel);
+            files.add(new FilePreview("src/main/resources/templates/login.html", loginHtmlContent, "html"));
+
+            // Registration Controller (if registration enabled)
+            boolean regEnabled = security.isRegistrationEnabled();
+            if (regEnabled && security.getPrincipalEntity() != null) {
+                String regControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RegistrationController.ftl", formModel);
+                files.add(new FilePreview(basePath + "controller/RegistrationController.java", regControllerContent, "java"));
+            }
+        }
+
+        // 10. Keycloak OAuth/OIDC components (if KEYCLOAK_OAUTH auth type)
+        if ("KEYCLOAK_OAUTH".equalsIgnoreCase(security.getAuthenticationType())) {
+            Map<String, Object> kcModel = new HashMap<>();
+            kcModel.put("packageName", request.getPackageName());
+            kcModel.put("security", security);
+
+            // KeycloakOAuthConfig
+            String kcOAuthContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/KeycloakOAuthConfig.ftl", kcModel);
+            files.add(new FilePreview(basePath + "config/KeycloakOAuthConfig.java", kcOAuthContent, "java"));
+
+            // UserSynchronizationService (sync Keycloak users to local DB)
+            if (security.getPrincipalEntity() != null) {
+                String userSyncContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/UserSynchronizationService.ftl", kcModel);
+                files.add(new FilePreview(basePath + "service/UserSynchronizationService.java", userSyncContent, "java"));
+            }
+        }
+
+        // 11. Keycloak realm export and docker-compose (if any Keycloak mode)
+        boolean isKeycloak = "KEYCLOAK_RS".equalsIgnoreCase(security.getAuthenticationType())
+                || "KEYCLOAK_OAUTH".equalsIgnoreCase(security.getAuthenticationType());
+        if (isKeycloak) {
+            Map<String, Object> kcDockerModel = new HashMap<>();
+            kcDockerModel.put("security", security);
+
+            // keycloak-realm.json
+            String realmContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/keycloak-realm.json.ftl", kcDockerModel);
+            files.add(new FilePreview("src/main/resources/keycloak-realm.json", realmContent, "json"));
+
+            // docker-compose.keycloak.yml
+            String kcComposeContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/docker-compose.keycloak.yml.ftl", kcDockerModel);
+            files.add(new FilePreview("docker-compose.keycloak.yml", kcComposeContent, "yaml"));
+        }
+
+        // 12. Integration Test Helpers (if test users enabled)
+        if (security.isTestUsersEnabled()) {
+            Map<String, Object> testModel = new HashMap<>();
+            testModel.put("packageName", request.getPackageName());
+            testModel.put("security", security);
+
+            // BaseIT - Base integration test class
+            String baseItContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/BaseIT.ftl", testModel);
+            String testBasePath = "src/test/java/" + request.getPackageName().replace(".", "/") + "/";
+            files.add(new FilePreview(testBasePath + "BaseIT.java", baseItContent, "java"));
+
+            // SecurityTestConfig
+            String secTestConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SecurityTestConfig.ftl", testModel);
+            files.add(new FilePreview(testBasePath + "config/SecurityTestConfig.java", secTestConfigContent, "java"));
+
+            // Test user SQL seed script
+            String testUsersContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/test-users.sql.ftl", testModel);
+            files.add(new FilePreview("src/test/resources/test-users.sql", testUsersContent, "sql"));
         }
 
         return files;
