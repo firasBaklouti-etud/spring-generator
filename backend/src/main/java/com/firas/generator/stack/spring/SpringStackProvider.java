@@ -249,6 +249,23 @@ public class SpringStackProvider implements StackProvider {
         if (request.getTables() != null && !request.getTables().isEmpty()) {
             boolean includeDto = request.isIncludeDto() || request.isIncludeController() || request.isIncludeService();
             boolean includeMapper = request.isIncludeMapper() || includeDto;
+
+            // Check for MapStruct in dependencies
+            List<DependencyMetadata> deps = request.getDependencies();
+            boolean hasMapStruct = deps != null && deps.stream()
+                    .anyMatch(dep -> "mapstruct".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("mapstruct")));
+
+            // Check for Rest-Assured in dependencies
+            boolean hasRestAssured = deps != null && deps.stream()
+                    .anyMatch(dep -> "rest-assured".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("rest-assured")));
+
+            // Check for Testcontainers in dependencies
+            boolean hasTestcontainers = deps != null && deps.stream()
+                    .anyMatch(dep -> "testcontainers".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("testcontainers")));
+
             for (Table table : request.getTables()) {
                 if (table.isJoinTable()) {
                     continue; // Skip join tables
@@ -270,7 +287,11 @@ public class SpringStackProvider implements StackProvider {
                     files.add(codeGenerator.generateDto(table, request.getPackageName()));
                 }
                 if (includeMapper) {
-                    files.add(codeGenerator.generateMapper(table, request.getPackageName()));
+                    if (hasMapStruct) {
+                        files.add(codeGenerator.generateMapStructMapper(table, request.getPackageName()));
+                    } else {
+                        files.add(codeGenerator.generateMapper(table, request.getPackageName()));
+                    }
                 }
                 
                 // Generate tests if enabled
@@ -279,9 +300,18 @@ public class SpringStackProvider implements StackProvider {
                         files.add(codeGenerator.generateRepositoryTest(table, request.getPackageName()));
                     }
                     if (request.isIncludeController()) {
-                        files.add(codeGenerator.generateControllerTest(table, request.getPackageName()));
+                        if (hasRestAssured) {
+                            files.add(codeGenerator.generateRestAssuredTest(table, request.getPackageName()));
+                        } else {
+                            files.add(codeGenerator.generateControllerTest(table, request.getPackageName()));
+                        }
                     }
                 }
+            }
+
+            // Generate Testcontainers config if enabled
+            if (request.isIncludeTests() && hasTestcontainers) {
+                files.addAll(generateTestcontainersFiles(request));
             }
         }
         
@@ -1114,6 +1144,29 @@ public class SpringStackProvider implements StackProvider {
             String changesetContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/001-init-schema.xml.ftl", model);
             files.add(new FilePreview("src/main/resources/db/changelog/001-init-schema.xml", changesetContent, "xml"));
         }
+
+        return files;
+    }
+
+    /**
+     * Generates Testcontainers configuration and base test class.
+     */
+    private List<FilePreview> generateTestcontainersFiles(ProjectRequest request) {
+        List<FilePreview> files = new ArrayList<>();
+        String testBasePath = "src/test/java/" + request.getPackageName().replace(".", "/") + "/";
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        model.put("request", request);
+        model.put("databaseType", request.getDatabaseType() != null ? request.getDatabaseType() : "h2");
+
+        // TestcontainersConfig
+        String configContent = templateService.processTemplateToString(TEMPLATE_DIR + "TestcontainersConfig.ftl", model);
+        files.add(new FilePreview(testBasePath + "TestcontainersConfig.java", configContent, "java"));
+
+        // TestcontainersTest base class
+        String baseTestContent = templateService.processTemplateToString(TEMPLATE_DIR + "TestcontainersTest.ftl", model);
+        files.add(new FilePreview(testBasePath + "TestcontainersTest.java", baseTestContent, "java"));
 
         return files;
     }

@@ -260,6 +260,19 @@ public class SpringCodeGenerator implements CodeGenerator {
 
         return new FilePreview(path, content, "java");
     }
+
+    /**
+     * Generates a MapStruct-based mapper interface for a table.
+     */
+    public FilePreview generateMapStructMapper(Table table, String packageName) {
+        String effectivePackage = getEffectivePackage(packageName, table, "mapper");
+        Map<String, Object> model = createModel(table, packageName, effectivePackage, "mapper");
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "MapStructMapper.ftl", model);
+        String path = generatePath(packageName, table, "mapper", "Mapper", false);
+
+        return new FilePreview(path, content, "java");
+    }
     
     /**
      * Generates a JUnit test for the repository layer.
@@ -292,6 +305,27 @@ public class SpringCodeGenerator implements CodeGenerator {
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "ControllerTest.ftl", model);
         String path = generatePath(packageName, table, "controller", "ControllerTest", true);
+
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates a Rest-Assured based controller test for a table.
+     */
+    public FilePreview generateRestAssuredTest(Table table, String packageName) {
+        String effectivePackage = getEffectivePackage(packageName, table, "controller");
+        Map<String, Object> model = createModel(table, packageName, effectivePackage, "controller");
+
+        SecurityConfig secConfig = securityConfig.get();
+        if (secConfig != null && secConfig.isEnabled()) {
+            model.put("securityEnabled", true);
+            model.put("authType", secConfig.getAuthenticationType());
+        } else {
+            model.put("securityEnabled", false);
+        }
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "RestAssuredTest.ftl", model);
+        String path = generatePath(packageName, table, "controller", "RestAssuredTest", true);
 
         return new FilePreview(path, content, "java");
     }
