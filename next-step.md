@@ -1,314 +1,158 @@
-# Next Steps — project Generator MCP
+# Plan: Match Bootify Features + Overhaul Security Generation
 
-> Comprehensive list of bugs, improvements, and feature ideas.
-> Organized by priority. Compiled from MCP tool testing + full source code review.
+## Scope
+Two main objectives:
+1. **General feature parity** with Bootify across the project
+2. **Complete security generation overhaul** (both backend code quality and frontend UI/UX)
 
----
-
-## 🔴 P0 — Critical Bugs (Generated code won't compile)
-
-### 1. Double Package Suffix in All Templates
-**Files:** `Entity.ftl`, `Service.ftl`, `Repository.ftl`, `Controller.ftl`, `Dto.ftl`, `Mapper.ftl`
-
-Templates append the layer suffix (`.entity`, `.service`, etc.) to `packageName`, but `getEffectivePackage()` already includes it. Result:
-```
-package com.example.demo.entity.entity;   // WRONG
-package com.example.demo.service.service; // WRONG
-```
-**Fix:** Templates should use `package ${packageName};` without appending the layer suffix, OR `getEffectivePackage()` should stop appending it.
-
-### 2. Cross-Package Imports Broken for Non-LAYERED Structures
-**Files:** `Controller.ftl`, `Service.ftl`
-
-Controller imports `${packageName}.entity.${className}` — but for FEATURE/DDD/HEXAGONAL structures, `packageName` is the controller's effective package, not the base package. These imports resolve to nonexistent packages.
-
-**Fix:** Pass `basePackageName` to all templates (like `Mapper.ftl` already does) and use it for cross-layer imports.
-
-### 3. Thread-Unsafe Singleton State
-**File:** `SpringCodeGenerator.java` (lines 39-40)
-
-`securityConfig` and `springConfig` are mutable instance fields on a `@Component` singleton. Two concurrent requests will overwrite each other's configuration.
-
-**Fix:** Pass config as method parameters, or use a request-scoped context object.
-
-### 4. `dependencyMap` Never Populated
-**File:** `SpringDependencyProvider.java` (line 26)
-
-`initializeDynamicDependencies()` never calls `dependencyMap.put(...)`. Every call to `getDependencyById()` returns `null`.
-
-**Fix:** Add `dependencyMap.put(dep.getId(), dep)` inside the initialization loop.
-
-### 5. Missing Critical Dependencies in Generated `pom.xml`
-**File:** `pom.xml.ftl` / `SpringStackProvider.java`
-
-Generated projects are missing:
-- `spring-boot-starter-security` (needed for SecurityFilterChain)
-- `spring-boot-starter-data-jpa` (needed for @Entity, JpaRepository)
-- `spring-boot-starter-web` (needed for @RestController)
-- `mysql-connector-j` (needed by datasource config)
-
-**Fix:** Auto-include these based on project features (security enabled → add security starter, tables present → add JPA + driver).
-
-### 6. Duplicate Methods in Generated `Users.java`
-`getPassword()` and `getUsername()` are defined twice — once as POJO getters, once as `UserDetails` overrides. Won't compile.
-
-**Fix:** Remove the duplicate POJO getters when the entity implements `UserDetails`, or merge them.
-
-### 7. Missing `findByEmail` in Generated Repository
-`CustomUserDetailsService` calls `repository.findByEmail(username)`, but the generated `UsersRepository` doesn't declare this method.
-
-**Fix:** When security is enabled with `usernameField = "email"`, auto-add `Optional<Users> findByEmail(String email)` to the repository.
+Given the scale, this plan is organized into priority phases. Each phase builds on the previous one.
 
 ---
 
-## 🟠 P1 — Major Issues (Functional gaps / anti-patterns)
+## Phase 1: Security Generation Overhaul (Priority - HIGH)
 
-### 8. No PUT/PATCH Endpoint
-`Controller.ftl` generates GET, POST, DELETE but **no update endpoint**. `Mapper.ftl` generates `updateEntity()` but it's never wired into the service or controller.
+This is the user's primary pain point. Both the generated code and the UI need improvement.
 
-**Fix:** Add PUT endpoint in controller + `update()` method in service that uses the mapper.
+### 1A. Backend Security Model Enhancements [x]
 
-### 9. No Primary Key Fallback in Templates
-If a table has no PK defined, the template renders `JpaRepository<User, >` (empty type parameter) — invalid Java.
+**Files to modify:**
+- `backend/src/main/java/com/firas/generator/model/config/SecurityConfig.java` [x]
+- `backend/src/main/java/com/firas/generator/model/config/SecurityRule.java` [x]
+- `backend/src/main/java/com/firas/generator/model/ProjectRequest.java` [x]
 
-**Fix:** Default to `Long` if no PK is found, or throw a clear validation error during generation.
+**Changes:**
+- [x] Add fields to `SecurityConfig`:
+  - [x] `signingAlgorithm` (HS256 / RS256) for JWT
+  - [x] `socialLogins` (list: GOOGLE, GITHUB, FACEBOOK)
+  - [x] `formLoginEnabled` (boolean for SSR form login)
+  - [x] `keycloakEnabled`, `keycloakRealm`, `keycloakClientId`, `keycloakClientSecret`, `keycloakIssuerUrl`
+  - [x] `passwordResetEnabled`, `passwordResetTokenField`, `passwordResetExpiryField`
+  - [x] `refreshTokenPersisted` (boolean - store in DB vs in-memory)
+  - [x] `refreshTokenEntity` (table name for refresh tokens)
+  - [x] `rememberMeEnabled`, `rememberMeMode` (ALWAYS / CHECKBOX)
+  - [x] `registrationEnabled` (boolean toggle)
+  - [x] `securityStyle` (ANNOTATION / CONFIG) - @PreAuthorize vs SecurityFilterChain
+  - [x] `staticUserFallback` (boolean - if no user table, create in-memory users)
+  - [x] `testUsersEnabled` (boolean)
 
-### 10. Composite Primary Keys Not Supported
-Multiple PK columns produce concatenated types like `IntegerLong`. No `@EmbeddedId` / `@IdClass` support.
+### 1B. New Security Templates (Backend) [/]
 
-**Fix:** Detect composite PKs and generate an `@IdClass` or `@EmbeddedId` wrapper.
+**New FreeMarker templates to create in `backend/src/main/resources/templates/spring/security/`:**
 
-### 11. `ManyToMany` Always Gets `FetchType.EAGER`
-`Entity.ftl` hardcodes `FetchType.EAGER` for all `@ManyToMany` relationships — not just roles. This is an N+1 anti-pattern for general M:N relations like students↔courses.
+1. [x] **RS256 JWT Support:**
+   - [x] `JwtUtil_RS256.ftl` - RSA key-based JWT signing/verification (Integrated into `JwtUtil.ftl`)
+   - [x] Update existing `JwtUtil.ftl` to conditionally use HS256 or RS256
 
-**Fix:** Default to `FetchType.LAZY` for all relationships. Only use EAGER for security roles (if security is enabled).
+2. [x] **Social Login:**
+   - [ ] `OAuth2LoginConfig.ftl` - Spring Security OAuth2 login config for Google/GitHub/Facebook (Partially handled)
+   - [x] `OAuth2UserService.ftl` - Custom OAuth2UserService to map social profiles to local users
+   - [x] `SocialAuthController.ftl` - Endpoint to handle social login code exchange for JWT
 
-### 12. App Crashes if `start.spring.io` Is Unreachable
-`SpringDependencyProvider.java` — `@PostConstruct` throws `RuntimeException` if the external API call fails. The entire app won't start.
+3. [ ] **Form-Based Login:**
+   - [ ] `FormLoginSecurityConfig.ftl` - Security config for form-based SSR authentication
+   - [ ] `AuthenticationController.ftl` - MVC controller for login/logout pages (Thymeleaf)
+   - [ ] `login.html.ftl` - Thymeleaf login template
+   - [ ] `RegistrationController.ftl` - MVC controller for registration page
 
-**Fix:** Catch the exception, fall back to a bundled/cached dependency list, and log a warning.
+4. [x] **Keycloak Integration:**
+   - [x] `KeycloakResourceServerConfig.ftl` - Security config as resource server (Integrated)
+   - [ ] `KeycloakOAuthConfig.ftl` - Security config for OAuth/OIDC client
+   - [ ] `keycloak-realm.json.ftl` - Realm export template
+   - [ ] `docker-compose.keycloak.yml.ftl` - Docker compose snippet
+   - [ ] `UserSynchronizationService.ftl` - Sync Keycloak users to local DB
 
-### 13. DTOs Generated but Never Used
-DTO and Mapper classes are generated, but Controller and Service still use raw entities for request/response.
+5. [x] **Password Reset:**
+   - [x] `PasswordResetService.ftl` - Token generation, validation, expiry logic
+   - [x] `PasswordResetController.ftl` - REST endpoints for request/reset password
+   - [x] `MailService.ftl` - Email sending service (using Spring Mail)
 
-**Fix:** Wire DTOs into controller endpoints. Controller should accept/return DTOs, service converts via mapper.
+6. [x] **Refresh Token Persistence:**
+   - [x] `RefreshTokenEntity.ftl` - JPA entity for refresh tokens
+   - [x] `RefreshTokenRepository.ftl` - Repository
+   - [x] `RefreshTokenService.ftl` - Service for token CRUD, rotation, expiry cleanup
+   - [x] Update `AuthController.ftl` to use DB-stored refresh tokens
 
-### 14. No `@Valid` / Bean Validation Annotations
-No `@Valid` on `@RequestBody` in controllers. No `@NotNull`, `@Size`, `@Email` on entity/DTO fields despite having nullable/unique metadata from the schema.
+7. [x] **Remember-Me:**
+   - [x] Update `SecurityConfig.ftl` to include `rememberMe(...)` configuration
+   - [x] Generate cookie settings and token repository if needed
 
-**Fix:** Map SQL constraints to validation annotations: `NOT NULL` → `@NotNull`, `VARCHAR(255)` → `@Size(max=255)`, unique → document it.
+8. [ ] **Integration Test Helpers:**
+   - [ ] `BaseIT.ftl` - Base integration test class with authenticated session/bearer token helpers
+   - [ ] `SecurityTestConfig.ftl` - Test security configuration
+   - [ ] Test user SQL seed scripts
 
-### 15. No Global Exception Handler
-No `@RestControllerAdvice` template. Errors return raw Spring stack traces or empty 404s.
+9. [x] **Annotation-Based Security Option:**
+   - [x] Update `Controller.ftl` to conditionally add `@PreAuthorize` annotations
 
-**Fix:** Generate a `GlobalExceptionHandler` with handlers for `EntityNotFoundException`, `MethodArgumentNotValidException`, `AccessDeniedException`, etc.
+10. [x] **Swagger JWT Integration:**
+    - [x] Update `OpenApiConfig.ftl` to add `@SecurityScheme` for Bearer JWT
 
-### 16. No CORS Configuration
-No `WebMvcConfigurer` for CORS. Frontend-backend projects will fail on cross-origin requests.
+**Files to modify:**
+- `backend/src/main/java/com/firas/generator/stack/spring/SpringStackProvider.java` [x]
+- `backend/src/main/java/com/firas/generator/stack/spring/SpringCodeGenerator.java` [x]
+- `backend/src/main/resources/templates/spring/SecurityConfig.ftl` [x]
+- `backend/src/main/resources/templates/spring/pom.xml.ftl` [x]
+- `backend/src/main/resources/templates/spring/application.properties.ftl` [x]
 
-**Fix:** Generate a `CorsConfig.java` with configurable allowed origins (default: `http://localhost:3000`).
+### 1C. Frontend Security UI Overhaul [x]
 
-### 17. Typo in Generated Endpoint Path
-`UsersController` maps to `/api/userss` (double 's').
+**File to modify:** `frontend/components/generator/security-phase.tsx` [x]
 
-**Fix:** Fix pluralization logic in template or `SqlParser.plural()`.
+**New layout (inspired by Bootify's Security tab):**
+- [x] 1. **Authentication Type Section** (Cards: JWT, Basic Auth, Form Login, Keycloak)
+- [x] 2. **Social Login Panel** (Google, GitHub, Facebook toggles + fields)
+- [x] 3. **Keycloak Configuration Panel** (Realm, Client ID, Secret, Issuer)
+- [x] 4. **Token & Session Policy Panel** (JWT TTL, Refresh TTL, Persistence, Remember-me)
+- [x] 5. **Password Reset Section** (Enable toggle, Token/Expiry field selectors)
+- [x] 6. **Security Style Toggle** (Annotation vs Config)
+- [x] 7. **Test Users Section**
+- [ ] 8. **Live Preview Panel**
 
-### 18. Duplicated Type Mapping Logic
-`SqlParser.java` has its own `mapJavaType()` that diverges from `SpringTypeMapper.java`:
-- `DATE` → `LocalDateTime` (should be `LocalDate`)
-- `TINYINT` → `Boolean` vs `Integer`
-
-**Fix:** Remove `mapJavaType()` from `SqlParser` and always use the stack's TypeMapper via `applyTypeMappings()`.
-
----
-
-## 🟡 P2 — Important Improvements
-
-### 19. No `.gitignore` in Generated Project
-Every generated project should include a `.gitignore` for `target/`, `*.class`, `.idea/`, `.vscode/`, `*.iml`, `.env`, etc.
-
-### 20. No `README.md` in Generated Project
-Generate a README with: project name, description, how to build/run, API endpoints, database setup instructions.
-
-### 21. No Maven Wrapper (`mvnw`)
-Generated projects should include the Maven wrapper so users don't need Maven globally installed.
-
-### 22. No Pagination / Sorting Support
-`service.findAll()` returns `List<T>`. Standard Spring Boot APIs should support `Pageable` → `Page<T>`.
-
-**Fix:** Add optional paginated `findAll(Pageable pageable)` in service and `?page=0&size=20` in controller.
-
-### 23. No Service Test Generation
-`SpringCodeGenerator` generates `RepositoryTest` and `ControllerTest` but no `ServiceTest`. The service layer (often the most critical) goes untested.
-
-### 24. Entity Imports Are Over-Inclusive / Under-Inclusive
-`Entity.ftl` always imports `LocalDate` and `LocalDateTime` even if unused. Missing imports for `BigDecimal`, `UUID`, `byte[]` which the type mapper can produce.
-
-**Fix:** Conditionally import based on actual column types used.
-
-### 25. Test Templates Have Placeholder TODOs
-`ControllerTest.ftl` and `RepositoryTest.ftl` contain `/* TODO: set test value */` — generated tests won't set field values and test with null entities.
-
-**Fix:** Generate sample values based on column type (e.g., `"test"` for String, `1L` for Long, `true` for Boolean).
-
-### 26. No `application.yml` Option
-Only `application.properties` is generated. Many teams prefer YAML format.
-
-### 27. `list_dependencies` Returns 80KB Payload
-Too large for LLM context windows. Wastes tokens.
-
-**Fix:** Add `category` filter parameter (e.g., `list_dependencies(category="Web")`). Or paginate the response.
-
-### 28. `configure_security` Doesn't Validate `principalEntity`
-No check that the `principalEntity` matches an existing parsed table name. User can set `principalEntity = "Foo"` with no `Foo` table.
-
-**Fix:** Validate against the tables in the project request, or at minimum warn.
-
-### 29. `preview_project` Returns Full File Content
-Should return just file paths and sizes for the preview. Full content should be opt-in to save tokens.
-
-### 30. No Swagger / OpenAPI Auto-Configuration
-No `springdoc-openapi` dependency or configuration. API documentation should be generated automatically.
-
-**Fix:** Add option to include `springdoc-openapi-starter-webmvc-ui` and generate an `OpenApiConfig.java`.
-
-### 31. Hardcoded MySQL Config with root/no-password
-Generated `application.properties` assumes MySQL with `root` and empty password. No H2 dev profile.
-
-**Fix:** Generate a `application-dev.properties` with H2 in-memory config for instant dev experience.
-
-### 32. Controller Indentation Bug
-`Controller.ftl` and `Service.ftl` — constructor body starts at column 0 inside the class:
-```java
-    public UsersController(UsersService service) {
-    this.service = service;  // should be indented
-    }
-```
+**Store updates in `frontend/lib/store.ts`:**
+- [x] Add all new SecurityConfig fields to the store interface
 
 ---
 
-## 🔵 P3 — Feature Ideas (New Capabilities)
+## Phase 2: General Feature Additions (Priority - MEDIUM)
 
-### 33. Support OpenAPI Spec as Alternative Input
-Currently only SQL is accepted as input. Many developers design API-first.
-
-**Add:** `parse_openapi` tool — accepts OpenAPI YAML/JSON, generates endpoints + DTOs from it. Pairs with `parse_sql` for full coverage.
-
-### 34. Database Migration Support (Flyway / Liquibase)
-Already #1 on ROADMAP.md. Essential for production use. Generate migration files from schema diff.
-
-### 35. Implement Node / Nest / FastAPI Stacks
-`StackType` enum declares them, `ListDependenciesTool` advertises them, but no implementation exists. Selecting non-SPRING throws at runtime.
-
-**Fix (short-term):** Remove from MCP tool schema until implemented.
-**Fix (long-term):** Implement at least one alternative stack (FastAPI is the easiest — smallest surface area).
-
-### 36. Gradle Build Support
-`SpringConfig.buildTool` accepts `"gradle"` but only `pom.xml.ftl` exists. No `build.gradle.ftl`.
-
-### 37. Docker File Generation via MCP
-`ProjectRequest.includeDocker` flag exists. Docker templates may exist. But no MCP tool exposes this option.
-
-**Fix:** Add `includeDocker` to the MCP `generate_project` / `preview_project` tool schema.
-
-### 38. Add `validate_project` MCP Tool
-New tool that takes a `ProjectRequest` and returns validation errors *before* generation:
-- Missing PK warnings
-- Invalid package names
-- Security config referencing non-existent entities
-- Unsupported stack type
-
-### 39. Add `customize_template` MCP Tool
-Allow users to override specific templates (e.g., "use Lombok on entities", "use records for DTOs") without forking the generator.
-
-### 40. CQRS / Event Sourcing Templates
-For advanced architectures. Generate Command/Query separation patterns, Event classes, Event handlers.
-
-### 41. Multi-Module Project Generation
-Generate parent POM + child modules (e.g., `api`, `service`, `domain`, `infrastructure`). Important for DDD.
-
-### 42. Audit Fields Generation
-Optional `createdAt`, `updatedAt`, `createdBy`, `updatedBy` fields on all entities with `@EntityListeners(AuditingEntityListener.class)`.
-
-### 43. Soft Delete Support
-Optional `@SQLDelete` / `@Where(clause = "deleted = false")` pattern for entities.
-
-### 44. API Versioning Support
-Generate versioned controllers: `/api/v1/users`, `/api/v2/users` with configurable strategy (URL path, header, query param).
+### 2A. Gradle Support [ ]
+### 2B. Kotlin Support [ ]
+### 2C. application.yml Support [ ]
+### 2D. Lombok Support [x]
+### 2E. MongoDB Support [ ]
+### 2F. MapStruct Integration [ ]
+### 2G. Testcontainers Support [ ]
+### 2H. Rest-Assured Support [ ]
 
 ---
 
-## 🟣 Architecture Refactoring
+## Phase 3: Advanced Features (Priority - LOWER)
 
-### 45. Decompose `SpringStackProvider` (God Class)
-At 563 lines, it handles too many concerns. Split into:
-- `PomXmlGenerator`
-- `ApplicationPropertiesGenerator`
-- `SecurityCodeGenerator`
-- `DockerFileGenerator`
-- `MigrationFileGenerator`
-
-### 46. Stop Mutating Input `ProjectRequest`
-Security preprocessing modifies `Table` objects in-place (adds password column, roles relationship). This means the `ProjectRequest` can't be reused for preview→generate flow.
-
-**Fix:** Clone tables before mutation, or use a separate `ProcessedProjectRequest`.
-
-### 47. RoleRepository Uses String Concatenation
-`generateRoleRepository()` builds Java source via string concatenation instead of a FreeMarker template. Inconsistent with the rest of the architecture.
-
-**Fix:** Create `RoleRepository.ftl` template.
-
-### 48. `CodeGenerator.generateAllCrud()` Default Method Is Dead Code
-`CodeGenerator.java` has a `default generateAllCrud()` that duplicates the loop in `SpringStackProvider.generateProject()`. It's never called.
-
-**Fix:** Either use it or remove it.
-
-### 49. `applyTypeMappings()` Overwrites User-Provided Types
-If a user manually provides `javaType` via MCP (without SQL parsing), `applyTypeMappings()` unconditionally overwrites it.
-
-**Fix:** Only overwrite if `javaType` is null or empty.
-
-### 50. No JDBC Connection Cleanup
-`SqlParser.loadMetadata(Connection)` receives a `Connection` but never closes it. Potential resource leak.
-
-**Fix:** Use try-with-resources or ensure caller closes connection in a `finally` block.
-
-### 51. Exception Swallowing in SqlParser
-`catch (Exception ignore) {}` silently swallows all exceptions during unique index loading.
-
-**Fix:** At minimum `log.debug("Failed to load unique indexes", e)`.
-
-### 52. Custom `Supplier` Interface Shadows `java.util.function.Supplier`
-`SqlParser.java` defines a private `Supplier<T>` that throws checked exceptions.
-
-**Fix:** Rename to `ThrowingSupplier<T>`.
+### 3A. Multi-Module Project Support [ ]
+### 3B. Frontend Scaffolding (Thymeleaf/Angular/React) [ ]
+### 3C. Custom Template Support [ ]
 
 ---
 
-## 📝 Documentation Debt
+## Implementation Order (Recommended)
 
-### 53. README.md Is Outdated
-- Still references REST API endpoints (`/api/dependencies/groups`) — actual API is MCP-based
-- Lists "JWT Authentication" and "Docker Compose" as future — both are already implemented
-- Architecture diagram doesn't mention MCP, stack abstraction, or security module
-
-### 54. RBAC_STATUS.md Claims ~95% Completion
-States "Generated projects compile and run successfully" as the sole unchecked criterion. Given the double-package-suffix bug, generated projects **do not compile** for non-LAYERED structures.
-
-### 55. No MCP Tool Documentation
-No doc explaining what each MCP tool does, what parameters it accepts, and what it returns. Users (and AI agents) have to guess from the JSON schema.
-
-**Fix:** Add a `MCP_TOOLS.md` with examples for each tool.
-
----
-
-## ✅ Suggested Execution Order
-
-| Phase | Items | Goal |
-|-------|-------|------|
-| **Phase 1: Make it compile** | #1, #2, #4, #5, #6, #7, #17, #32 | Generated code compiles on first try |
-| **Phase 2: Make it production-ready** | #3, #8, #12, #13, #14, #15, #16, #18 | Real-world usable output |
-| **Phase 3: Polish** | #9, #10, #11, #19, #20, #21, #22, #24, #25, #30, #31 | Professional quality |
-| **Phase 4: Developer experience** | #23, #26, #27, #28, #29, #38, #53, #54, #55 | Better DX for MCP users |
-| **Phase 5: Architecture** | #45, #46, #47, #48, #49, #50, #51, #52 | Clean, maintainable codebase |
-| **Phase 6: New features** | #33, #34, #35, #36, #37, #39, #40, #41, #42, #43, #44 | Competitive feature set |
+1. [x] **Security model expansion**
+2. [x] **RS256 JWT + Swagger JWT integration**
+3. [x] **Password reset generation**
+4. [x] **Refresh Token DB persistence**
+5. [x] **Social login support**
+6. [x] **Registration toggle + static user fallback** (Implemented in model and templates)
+7. [x] **Annotation-based vs config-based security**
+8. [x] **Frontend Security UI overhaul**
+9. [ ] **Keycloak integration** (Only basic RS support exists)
+10. [ ] **Form-based login**
+11. [x] **Remember-me**
+12. [ ] **Integration test helpers**
+13. [ ] **Gradle support**
+14. [ ] **application.yml format**
+15. [x] **Lombok support**
+16. [ ] **Kotlin support**
+17. [ ] **MapStruct**
+18. [ ] **MongoDB support**
+19. [ ] **Testcontainers**
+20. [ ] **Rest-Assured**

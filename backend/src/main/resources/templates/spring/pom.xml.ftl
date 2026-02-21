@@ -21,7 +21,7 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
 		</dependency>
-        
+
         <#if dependencies?? && (dependencies?size > 0)>
         <#list dependencies as dep>
         <dependency>
@@ -61,6 +61,30 @@
 			<artifactId>jjwt-jackson</artifactId>
 			<version>0.11.5</version>
 			<scope>runtime</scope>
+		</dependency>
+		</#if>
+
+		<#-- Social Login / OAuth2 Client -->
+		<#if hasSocialLogins?? && hasSocialLogins>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-client</artifactId>
+		</dependency>
+		</#if>
+
+		<#-- Keycloak Resource Server -->
+		<#if hasKeycloak?? && hasKeycloak>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		</#if>
+
+		<#-- Password Reset (Mail) -->
+		<#if hasPasswordReset?? && hasPasswordReset>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 		</#if>
 

@@ -315,7 +315,7 @@ try {
     $testSummary = $testResult | Select-String "Tests run:"
     if ($testSummary) {
         $lastSummary = $testSummary | Select-Object -Last 1
-        Write-Step "Test Summary: $lastSummary"
+        Write-Step "Test Summary: $lastSummary"ont
     }
     Test-Result "JUnit tests pass" ($testExitCode -eq 0)
     if ($testExitCode -ne 0) {
@@ -336,7 +336,7 @@ try {
         -RedirectStandardError "$ScriptDir/demo_stderr.log"
     Write-Step "Demo PID: $($script:DemoProcess.Id)"
 
-    $demoReady = Wait-ForHealthCheck "http://localhost:$DemoPort/v3/api-docs" 40 3
+    $demoReady = Wait-ForHealthCheck "http://localhost:$DemoPort/v3/api-docs" 10 3
     Test-Result "Demo project started successfully" $demoReady
     if (-not $demoReady) {
         Write-Err "Demo stderr (last 20 lines):"
@@ -433,63 +433,63 @@ try {
         "Authorization" = "Bearer $adminToken"
     }
 
-    # --- CRUD: Category (CATEGORY_WRITE requires ADMIN) ---
-    Write-Step "Testing CRUD: Category..."
+    # --- CRUD: Comments (DELETE requires ADMIN, otherwise authenticated) ---
+    Write-Step "Testing CRUD: Comments..."
     $categoryId = $null
     try {
-        $catBody = @{ name = "Electronics" } | ConvertTo-Json
-        $catResp = Invoke-RestMethod -Uri "$baseUrl/api/categorys" -Method POST -Body $catBody -Headers $adminHeaders -TimeoutSec 10
+        $catBody = @{ content = "Great post!" } | ConvertTo-Json
+        $catResp = Invoke-RestMethod -Uri "$baseUrl/api/comments" -Method POST -Body $catBody -Headers $adminHeaders -TimeoutSec 10
         $categoryId = $catResp.id
-        Test-Result "CRUD: Create Category (admin)" ($null -ne $categoryId)
+        Test-Result "CRUD: Create Comment (admin)" ($null -ne $categoryId)
     } catch {
         Test-Result "CRUD: Create Category (admin)" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
-    # List categories with user auth (CATEGORY_READ is allowed for USER)
+    # List comments with user auth
     try {
-        $catGetResp = Invoke-RestMethod -Uri "$baseUrl/api/categorys" -Method GET -Headers $authHeaders -TimeoutSec 10
+        $catGetResp = Invoke-RestMethod -Uri "$baseUrl/api/comments" -Method GET -Headers $authHeaders -TimeoutSec 10
         $catCount = if ($catGetResp.content) { $catGetResp.content.Count } else { 0 }
-        Test-Result "CRUD: List Categories (user auth, count: $catCount)" ($catCount -gt 0)
+        Test-Result "CRUD: List Comments (user auth, count: $catCount)" ($catCount -gt 0)
     } catch {
-        Test-Result "CRUD: List Categories (user auth)" $false
+        Test-Result "CRUD: List Comments (user auth)" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
-    # --- CRUD: Product (GET is permitAll, POST/PUT/DELETE require ADMIN) ---
-    Write-Step "Testing CRUD: Product..."
+    # --- CRUD: Posts (GET is permitAll, DELETE require ADMIN) ---
+    Write-Step "Testing CRUD: Posts..."
 
-    # GET products - should work without auth (PERMIT_ALL)
+    # GET posts - should work without auth (PERMIT_ALL)
     try {
-        $productsResp = Invoke-RestMethod -Uri "$baseUrl/api/products" -Method GET -ContentType "application/json" -TimeoutSec 10
-        Test-Result "CRUD: List Products (no auth, PERMIT_ALL)" ($null -ne $productsResp)
+        $productsResp = Invoke-RestMethod -Uri "$baseUrl/api/posts" -Method GET -ContentType "application/json" -TimeoutSec 10
+        Test-Result "CRUD: List Posts (no auth, PERMIT_ALL)" ($null -ne $productsResp)
     } catch {
-        Test-Result "CRUD: List Products (no auth, PERMIT_ALL)" $false
+        Test-Result "CRUD: List Posts (no auth, PERMIT_ALL)" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
-    # --- CRUD: Order (requires AUTHENTICATED) ---
-    Write-Step "Testing CRUD: Order..."
+    # --- CRUD: Posts (Create as Admin) ---
+    Write-Step "Testing CRUD: Create Post..."
     $orderId = $null
     try {
         $orderBody = @{
-            status    = "PENDING"
-            createdAt = "2025-01-01T12:00:00"
+            title    = "My Post"
+            content = "Hello world"
         } | ConvertTo-Json
-        $orderResp = Invoke-RestMethod -Uri "$baseUrl/api/orders" -Method POST -Body $orderBody -Headers $authHeaders -TimeoutSec 10
+        $orderResp = Invoke-RestMethod -Uri "$baseUrl/api/posts" -Method POST -Body $orderBody -Headers $adminHeaders -TimeoutSec 10
         $orderId = $orderResp.id
-        Test-Result "CRUD: Create Order (authenticated)" ($null -ne $orderId)
+        Test-Result "CRUD: Create Post (admin)" ($null -ne $orderId)
     } catch {
-        Test-Result "CRUD: Create Order (authenticated)" $false
+        Test-Result "CRUD: Create Post (admin)" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
     try {
-        $ordersResp = Invoke-RestMethod -Uri "$baseUrl/api/orders" -Method GET -Headers $authHeaders -TimeoutSec 10
+        $ordersResp = Invoke-RestMethod -Uri "$baseUrl/api/posts" -Method GET -Headers $authHeaders -TimeoutSec 10
         $orderCount = if ($ordersResp.content) { $ordersResp.content.Count } else { 0 }
-        Test-Result "CRUD: List Orders (count: $orderCount)" ($orderCount -gt 0)
+        Test-Result "CRUD: List Posts (count: $orderCount)" ($orderCount -gt 0)
     } catch {
-        Test-Result "CRUD: List Orders" $false
+        Test-Result "CRUD: List Posts" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
@@ -545,17 +545,17 @@ try {
         Write-Err "  Error: $($_.Exception.Message)"
     }
 
-    # --- Admin API: Create Product (requires ADMIN role) ---
+    # --- Admin API: Create User (requires ADMIN role) ---
     try {
         $productBody = @{
-            name  = "Laptop"
-            price = 999.99
-            stock = 50
+            username  = "anotheruser"
+            email = "another@test.com"
+            passwordHash = "Pass"
         } | ConvertTo-Json
-        $productResp = Invoke-RestMethod -Uri "$baseUrl/api/products" -Method POST -Body $productBody -Headers $adminHeaders -TimeoutSec 10
-        Test-Result "Admin: Create Product (ADMIN role)" ($null -ne $productResp.id)
+        $productResp = Invoke-RestMethod -Uri "$baseUrl/api/users" -Method POST -Body $productBody -Headers $adminHeaders -TimeoutSec 10
+        Test-Result "Admin: Create User (ADMIN role)" ($null -ne $productResp.id)
     } catch {
-        Test-Result "Admin: Create Product (ADMIN role)" $false
+        Test-Result "Admin: Create User (ADMIN role)" $false
         Write-Err "  Error: $($_.Exception.Message)"
     }
 

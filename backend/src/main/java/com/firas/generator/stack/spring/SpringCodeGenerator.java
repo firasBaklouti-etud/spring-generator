@@ -202,6 +202,10 @@ public class SpringCodeGenerator implements CodeGenerator {
         if (secConfig != null && secConfig.isEnabled()) {
             model.put("securityEnabled", true);
 
+            // Determine if annotations should be used
+            boolean useAnnotations = "ANNOTATION".equalsIgnoreCase(secConfig.getSecurityStyle());
+            model.put("useAnnotations", useAnnotations);
+
             // Filter security rules for this entity's endpoints
             // Use pluralized name to match the Controller's @RequestMapping URL pattern
             if (secConfig.getRules() != null) {

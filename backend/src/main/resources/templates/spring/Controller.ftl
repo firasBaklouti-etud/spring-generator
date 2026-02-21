@@ -9,7 +9,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
 import org.springframework.security.access.prepost.PreAuthorize;
 </#if>
 
@@ -68,7 +68,7 @@ public class ${table.className}Controller {
         this.service = service;
     }
 
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
     <#assign entityUpper = table.className?upper_case>
     <@findSecurityRule httpMethod="GET"/>
     <#assign readRule = ruleResult>
@@ -79,7 +79,7 @@ public class ${table.className}Controller {
         return service.findAll(pageable);
     }
 
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
     <@preAuthorize ruleValue=readRule defaultPermission="${entityUpper}_READ"/>
 </#if>
     @GetMapping("/{id}")
@@ -89,7 +89,7 @@ public class ${table.className}Controller {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
     <@findSecurityRule httpMethod="POST"/>
     <#assign writeRule = ruleResult>
     <@preAuthorize ruleValue=writeRule defaultPermission="${entityUpper}_WRITE"/>
@@ -99,7 +99,7 @@ public class ${table.className}Controller {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.save(dto));
     }
 
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
     <@findSecurityRule httpMethod="PUT"/>
     <#assign updateRule = ruleResult>
     <@preAuthorize ruleValue=updateRule defaultPermission="${entityUpper}_WRITE"/>
@@ -111,7 +111,7 @@ public class ${table.className}Controller {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-<#if securityEnabled?? && securityEnabled>
+<#if securityEnabled?? && securityEnabled && (useAnnotations!false)>
     <@findSecurityRule httpMethod="DELETE"/>
     <#assign deleteRule = ruleResult>
     <@preAuthorize ruleValue=deleteRule defaultPermission="${entityUpper}_DELETE"/>

@@ -1,5 +1,10 @@
 package ${packageName}.dto;
 
+import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.math.BigDecimal;
+
 /**
  * Request object for user registration
  */

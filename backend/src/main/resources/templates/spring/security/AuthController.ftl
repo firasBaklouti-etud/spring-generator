@@ -2,7 +2,10 @@ package ${packageName}.controller;
 
 import ${packageName}.dto.AuthRequest;
 import ${packageName}.dto.AuthResponse;
+<#assign hasRegistration = !(security.registrationEnabled?? && !security.registrationEnabled)>
+<#if hasRegistration>
 import ${packageName}.dto.RegisterRequest;
+</#if>
 import ${packageName}.config.JwtUtil;
 <#if security.principalEntity??>
 import ${packageName}.entity.${security.principalEntity};
@@ -12,16 +15,24 @@ import ${packageName}.repository.${security.principalEntity}Repository;
 import ${packageName}.entity.Role;
 import ${packageName}.repository.RoleRepository;
 </#if>
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+import ${packageName}.security.RefreshToken;
+import ${packageName}.security.RefreshTokenService;
+</#if>
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+import org.springframework.security.core.userdetails.UserDetailsService;
+</#if>
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -38,13 +49,19 @@ public class AuthController {
 <#if security.rbacMode?? && security.rbacMode == "DYNAMIC">
     private final RoleRepository roleRepository;
 </#if>
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+    private final RefreshTokenService refreshTokenService;
+    private final UserDetailsService userDetailsService;
+</#if>
 
     public AuthController(
             AuthenticationManager authenticationManager,
             JwtUtil jwtUtil,
             PasswordEncoder passwordEncoder<#if security.principalEntity??>,
             ${security.principalEntity}Repository userRepository</#if><#if security.rbacMode?? && security.rbacMode == "DYNAMIC">,
-            RoleRepository roleRepository</#if>) {
+            RoleRepository roleRepository</#if><#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>,
+            RefreshTokenService refreshTokenService,
+            UserDetailsService userDetailsService</#if>) {
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
@@ -53,6 +70,10 @@ public class AuthController {
 </#if>
 <#if security.rbacMode?? && security.rbacMode == "DYNAMIC">
         this.roleRepository = roleRepository;
+</#if>
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+        this.refreshTokenService = refreshTokenService;
+        this.userDetailsService = userDetailsService;
 </#if>
     }
 
@@ -64,7 +85,16 @@ public class AuthController {
 
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         String token = jwtUtil.generateToken(userDetails);
+
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+        // Create DB-persisted refresh token
+        ${security.principalEntity} user = userRepository.findBy${security.usernameField?cap_first}(request.getUsername())
+                .orElseThrow();
+        RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(user);
+        String refreshToken = refreshTokenEntity.getToken();
+<#else>
         String refreshToken = jwtUtil.generateRefreshToken(userDetails);
+</#if>
 
         // Extract roles and permissions from authorities
         List<String> roles = userDetails.getAuthorities().stream()
@@ -80,7 +110,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(token, refreshToken, "Bearer", roles, permissions));
     }
 
-<#if security.principalEntity??>
+<#if hasRegistration && security.principalEntity??>
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
         // Check if user already exists
@@ -97,11 +127,6 @@ public class AuthController {
             user.setEmail(request.getEmail());
         }
 </#if>
-<#if security.usernameField != "username" && security.usernameField != "email">
-        if (request.getUsername() != null) {
-            user.setUsername(request.getUsername());
-        }
-</#if>
 
 <#if security.rbacMode?? && security.rbacMode == "DYNAMIC">
         // Assign default USER role
@@ -114,7 +139,12 @@ public class AuthController {
 
         // Generate tokens - user implements UserDetails
         String token = jwtUtil.generateToken(user);
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+        RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(user);
+        String refreshToken = refreshTokenEntity.getToken();
+<#else>
         String refreshToken = jwtUtil.generateRefreshToken(user);
+</#if>
 
         // Extract roles and permissions
         List<String> roles = user.getAuthorities().stream()
@@ -132,18 +162,43 @@ public class AuthController {
 </#if>
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refresh(@RequestBody java.util.Map<String, String> body) {
+    public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
         try {
             String refreshToken = body.get("refreshToken");
             if (refreshToken == null || refreshToken.isBlank()) {
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Refresh token is required"));
             }
 
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+            // Verify DB-persisted refresh token
+            RefreshToken storedToken = refreshTokenService.verifyRefreshToken(refreshToken)
+                    .orElse(null);
+            if (storedToken == null) {
+                return ResponseEntity.status(401)
+                        .body(Map.of("message", "Invalid or expired refresh token"));
+            }
+
+            // Rotate the refresh token
+            RefreshToken newRefreshToken = refreshTokenService.rotateRefreshToken(storedToken);
+
+            // Generate new access token
+            UserDetails userDetails = userDetailsService.loadUserByUsername(
+                    storedToken.getUser().get${security.usernameField?cap_first}());
+            String newAccessToken = jwtUtil.generateToken(userDetails);
+
+            return ResponseEntity.ok(new AuthResponse(
+                    newAccessToken,
+                    newRefreshToken.getToken(),
+                    "Bearer"
+            ));
+<#else>
             String username = jwtUtil.extractUsername(refreshToken);
 
             // Verify the token is not expired
             if (jwtUtil.isTokenExpired(refreshToken)) {
-                return ResponseEntity.status(401).build();
+                return ResponseEntity.status(401)
+                        .body(Map.of("message", "Refresh token has expired"));
             }
 
             // Generate new access token
@@ -152,8 +207,29 @@ public class AuthController {
                     refreshToken,
                     "Bearer"
             ));
+</#if>
         } catch (Exception e) {
-            return ResponseEntity.status(401).build();
+            return ResponseEntity.status(401)
+                    .body(Map.of("message", "Invalid refresh token"));
         }
     }
+
+<#if security.refreshTokenPersisted?? && security.refreshTokenPersisted>
+    /**
+     * Logout endpoint - revokes all refresh tokens for the authenticated user.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(@RequestBody Map<String, String> body) {
+        try {
+            String refreshToken = body.get("refreshToken");
+            if (refreshToken != null) {
+                refreshTokenService.verifyRefreshToken(refreshToken)
+                        .ifPresent(rt -> refreshTokenService.revokeAllUserTokens(rt.getUser()));
+            }
+            return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("message", "Logged out"));
+        }
+    }
+</#if>
 }

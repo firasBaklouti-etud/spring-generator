@@ -123,6 +123,37 @@ public class SpringStackProvider implements StackProvider {
                         }
                     }
 
+                    // 2.5 Ensure Password Reset Columns Exist
+                    if (security.isPasswordResetEnabled()) {
+                        String tokenField = security.getPasswordResetTokenField() != null ? security.getPasswordResetTokenField() : "resetToken";
+                        String expiryField = security.getPasswordResetExpiryField() != null ? security.getPasswordResetExpiryField() : "resetTokenExpiry";
+                        
+                        boolean hasToken = table.getColumns().stream()
+                                .anyMatch(c -> c.getFieldName().equals(tokenField));
+                        if (!hasToken) {
+                            com.firas.generator.model.Column tokenCol = new com.firas.generator.model.Column();
+                            tokenCol.setName(tokenField.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase());
+                            tokenCol.setFieldName(tokenField);
+                            tokenCol.setJavaType("String");
+                            tokenCol.setType("VARCHAR(255)");
+                            tokenCol.setNullable(true);
+                            table.addColumn(tokenCol);
+                        }
+                        
+                        boolean hasExpiry = table.getColumns().stream()
+                                .anyMatch(c -> c.getFieldName().equals(expiryField));
+                        if (!hasExpiry) {
+                            com.firas.generator.model.Column expiryCol = new com.firas.generator.model.Column();
+                            expiryCol.setName(expiryField.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase());
+                            expiryCol.setFieldName(expiryField);
+                            // We use LocalDateTime so it matches what PasswordResetService expects
+                            expiryCol.setJavaType("LocalDateTime");
+                            expiryCol.setType("TIMESTAMP");
+                            expiryCol.setNullable(true);
+                            table.addColumn(expiryCol);
+                        }
+                    }
+
                     // 3. Handle Role Entity Strategy M:N Injection
                     if ("ENTITY".equalsIgnoreCase(security.getRoleStrategy())) {
                         String roleEntityName = security.getRoleEntity();
@@ -436,6 +467,24 @@ public class SpringStackProvider implements StackProvider {
                 && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
         model.put("hasJwt", hasJwt);
 
+        // Check for social logins
+        boolean hasSocialLogins = request.getSecurityConfig() != null
+                && request.getSecurityConfig().getSocialLogins() != null
+                && !request.getSecurityConfig().getSocialLogins().isEmpty();
+        model.put("hasSocialLogins", hasSocialLogins);
+
+        // Check for Keycloak
+        boolean hasKeycloak = request.getSecurityConfig() != null
+                && (request.getSecurityConfig().isKeycloakEnabled()
+                    || "KEYCLOAK_RS".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType())
+                    || "KEYCLOAK_OAUTH".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType()));
+        model.put("hasKeycloak", hasKeycloak);
+
+        // Check for password reset
+        boolean hasPasswordReset = request.getSecurityConfig() != null
+                && request.getSecurityConfig().isPasswordResetEnabled();
+        model.put("hasPasswordReset", hasPasswordReset);
+
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "pom.xml.ftl", model);
         return new FilePreview("pom.xml", content, "xml");
     }
@@ -516,6 +565,11 @@ public class SpringStackProvider implements StackProvider {
         Map<String, Object> model = new HashMap<>();
         model.put("packageName", request.getPackageName());
         model.put("request", request);
+
+        // Check if JWT authentication is enabled for Swagger JWT integration
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "OpenApiConfig.ftl", model);
         String packagePath = request.getPackageName().replace(".", "/");
@@ -621,7 +675,8 @@ public class SpringStackProvider implements StackProvider {
         String appConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/ApplicationConfig.ftl", model);
         files.add(new FilePreview(basePath + "config/ApplicationConfig.java", appConfigContent, "java"));
 
-        // 2. CustomUserDetailsService (If Principal set)
+        // 2. CustomUserDetailsService (If Principal set and not using static fallback)
+        boolean useStaticFallback = security.isStaticUserFallback() && security.getPrincipalEntity() == null;
         if (security.getPrincipalEntity() != null) {
             Map<String, Object> tdsModel = new HashMap<>();
             tdsModel.put("packageName", request.getPackageName());
@@ -629,6 +684,13 @@ public class SpringStackProvider implements StackProvider {
             tdsModel.put("usernameField", security.getUsernameField());
             String tdsContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/CustomUserDetailsService.ftl", tdsModel);
             files.add(new FilePreview(basePath + "service/auth/CustomUserDetailsService.java", tdsContent, "java"));
+        } else if (useStaticFallback) {
+            // Generate InMemoryUserConfig for static user fallback
+            Map<String, Object> fallbackModel = new HashMap<>();
+            fallbackModel.put("packageName", request.getPackageName());
+            fallbackModel.put("definedRoles", security.getDefinedRoles());
+            String fallbackContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/InMemoryUserConfig.ftl", fallbackModel);
+            files.add(new FilePreview(basePath + "security/InMemoryUserConfig.java", fallbackContent, "java"));
         }
 
         // 3. Static RBAC Mode: Generate Permission and Role Enums
@@ -745,6 +807,61 @@ public class SpringStackProvider implements StackProvider {
             // Auth Controller
             String authControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthController.ftl", jwtModel);
             files.add(new FilePreview(basePath + "controller/AuthController.java", authControllerContent, "java"));
+        }
+
+        // 6. Password Reset (if enabled)
+        if (security.isPasswordResetEnabled() && security.getPrincipalEntity() != null) {
+            Map<String, Object> resetModel = new HashMap<>();
+            resetModel.put("packageName", request.getPackageName());
+            resetModel.put("principalEntity", security.getPrincipalEntity());
+            resetModel.put("usernameField", security.getUsernameField());
+            resetModel.put("passwordField", security.getPasswordField());
+            resetModel.put("passwordResetTokenField", security.getPasswordResetTokenField() != null ? security.getPasswordResetTokenField() : "resetToken");
+            resetModel.put("passwordResetExpiryField", security.getPasswordResetExpiryField() != null ? security.getPasswordResetExpiryField() : "resetTokenExpiry");
+
+            String resetServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/PasswordResetService.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/PasswordResetService.java", resetServiceContent, "java"));
+
+            String resetControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/PasswordResetController.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/PasswordResetController.java", resetControllerContent, "java"));
+
+            String mailServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/MailService.ftl", resetModel);
+            files.add(new FilePreview(basePath + "security/MailService.java", mailServiceContent, "java"));
+        }
+
+        // 7. Refresh Token Persistence (if enabled)
+        if (security.isRefreshTokenPersisted() && security.getPrincipalEntity() != null) {
+            Map<String, Object> refreshModel = new HashMap<>();
+            refreshModel.put("packageName", request.getPackageName());
+            refreshModel.put("principalEntity", security.getPrincipalEntity());
+
+            String refreshEntityContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenEntity.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshToken.java", refreshEntityContent, "java"));
+
+            String refreshRepoContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenRepository.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshTokenRepository.java", refreshRepoContent, "java"));
+
+            String refreshServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RefreshTokenService.ftl", refreshModel);
+            files.add(new FilePreview(basePath + "security/RefreshTokenService.java", refreshServiceContent, "java"));
+        }
+
+        // 8. Social Login Support (if any social providers configured)
+        boolean hasSocialLogins = security.getSocialLogins() != null && !security.getSocialLogins().isEmpty();
+        if (hasSocialLogins && security.getPrincipalEntity() != null) {
+            Map<String, Object> socialModel = new HashMap<>();
+            socialModel.put("packageName", request.getPackageName());
+            socialModel.put("principalEntity", security.getPrincipalEntity());
+            socialModel.put("usernameField", security.getUsernameField());
+            socialModel.put("passwordField", security.getPasswordField());
+
+            String oauthServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2UserService.ftl", socialModel);
+            files.add(new FilePreview(basePath + "security/CustomOAuth2UserService.java", oauthServiceContent, "java"));
+
+            // Social auth controller (for JWT token exchange after OAuth2 callback)
+            if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
+                String socialControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SocialAuthController.ftl", socialModel);
+                files.add(new FilePreview(basePath + "controller/SocialAuthController.java", socialControllerContent, "java"));
+            }
         }
 
         return files;

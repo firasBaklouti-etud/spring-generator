@@ -249,7 +249,8 @@ export function ProjectConfigPhase() {
         rbacMode: payload.securityConfig?.rbacMode,
         permissions: payload.securityConfig?.permissions,
         definedRoles: payload.securityConfig?.definedRoles,
-        fullSecurityConfig: payload.securityConfig
+        fullSecurityConfig: payload.securityConfig,
+        fullRequestPayload: payload,
       })
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate/preview`, {
         method: "POST",

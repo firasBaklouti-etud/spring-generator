@@ -159,7 +159,7 @@ export interface SecurityRule {
 
 export interface SecurityConfig {
   enabled: boolean
-  authenticationType?: "BASIC" | "JWT" | "OAUTH2"
+  authenticationType?: "BASIC" | "JWT" | "OAUTH2" | "FORM_LOGIN" | "KEYCLOAK_RS" | "KEYCLOAK_OAUTH"
   useDbAuth: boolean
   rules?: SecurityRule[]
   // Advanced Security
@@ -167,12 +167,49 @@ export interface SecurityConfig {
   usernameField?: string   // Name of the field (e.g. "email")
   passwordField?: string   // Name of the field (e.g. "password")
   roleStrategy?: "STRING" | "ENTITY" // Legacy (keep for now or remove if breaking)
-  rbacMode?: "STATIC" | "DYNAMIC"    // NEW: Dual-Mode RBAC
+  rbacMode?: "STATIC" | "DYNAMIC"    // Dual-Mode RBAC
   roleEntity?: string      // Name of the role entity (for Dynamic mode)
 
   // RBAC Configuration
   permissions?: string[]   // List of available permissions (e.g. "user:read")
-  definedRoles?: { name: string, permissions: string[] }[] // Role definitions
+  definedRoles?: { name: string, description?: string, permissions: string[] }[] // Role definitions
+
+  // JWT Configuration
+  signingAlgorithm?: "HS256" | "RS256"
+
+  // Social Login
+  socialLogins?: string[]  // ["GOOGLE", "GITHUB", "FACEBOOK"]
+  socialProviderConfigs?: Record<string, { clientId: string; clientSecret: string; redirectUri?: string }>
+
+  // Keycloak Configuration
+  keycloakEnabled?: boolean
+  keycloakRealm?: string
+  keycloakClientId?: string
+  keycloakClientSecret?: string
+  keycloakIssuerUrl?: string
+
+  // Password Reset
+  passwordResetEnabled?: boolean
+  passwordResetTokenField?: string
+  passwordResetExpiryField?: string
+
+  // Refresh Token Persistence
+  refreshTokenPersisted?: boolean  // DB vs in-memory (JWT-based)
+  refreshTokenEntity?: string      // table name for persisted tokens
+
+  // Remember-Me
+  rememberMeEnabled?: boolean
+  rememberMeMode?: "ALWAYS" | "CHECKBOX"
+
+  // Registration
+  registrationEnabled?: boolean
+
+  // Security Code Style
+  securityStyle?: "ANNOTATION" | "CONFIG"
+
+  // Fallback & Testing
+  staticUserFallback?: boolean     // in-memory users when no user table
+  testUsersEnabled?: boolean
 }
 
 
