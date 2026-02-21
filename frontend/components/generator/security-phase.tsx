@@ -30,6 +30,7 @@ import {
     RotateCcw,
     FlaskConical,
     Layers,
+    Eye,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1128,6 +1129,105 @@ export function SecurityPhase() {
                                 </motion.div>
                             </TabsContent>
                     </Tabs>
+                </motion.div>
+
+                {/* ── Live Preview Panel ──────────────────────────────────────── */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="mt-8 bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6"
+                >
+                    <div className="flex items-center gap-2 mb-4">
+                        <Eye className="w-5 h-5 text-cyan-400" />
+                        <h3 className="text-lg font-semibold text-zinc-100">Security Configuration Preview</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* Authentication */}
+                        <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Authentication</p>
+                            <p className="text-sm font-medium text-zinc-200">
+                                {security.authenticationType || "Not configured"}
+                            </p>
+                            {security.principalEntity && (
+                                <p className="text-xs text-zinc-400 mt-1">Principal: {security.principalEntity}</p>
+                            )}
+                        </div>
+
+                        {/* RBAC */}
+                        <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Authorization</p>
+                            <p className="text-sm font-medium text-zinc-200">
+                                {security.rbacMode === "DYNAMIC" ? "Dynamic RBAC" : "Static RBAC"}
+                            </p>
+                            <p className="text-xs text-zinc-400 mt-1">
+                                {(security.definedRoles?.length || 0)} roles, {(security.permissions?.length || 0)} permissions
+                            </p>
+                        </div>
+
+                        {/* Token Configuration */}
+                        {(security.authenticationType === "JWT") && (
+                            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Token</p>
+                                <p className="text-sm font-medium text-zinc-200">
+                                    {security.signingAlgorithm || "HS256"}
+                                </p>
+                                <div className="flex gap-1 mt-1 flex-wrap">
+                                    {security.refreshTokenPersisted && (
+                                        <Badge variant="secondary" className="text-[10px]">Persisted Refresh</Badge>
+                                    )}
+                                    {security.rememberMeEnabled && (
+                                        <Badge variant="secondary" className="text-[10px]">Remember Me</Badge>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Social Login */}
+                        {(security.socialLogins?.length ?? 0) > 0 && (
+                            <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Social Login</p>
+                                <div className="flex gap-1 flex-wrap">
+                                    {security.socialLogins?.map(p => (
+                                        <Badge key={p} variant="outline" className="text-[10px] border-zinc-700">
+                                            {p}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Security Rules */}
+                        <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Endpoint Rules</p>
+                            <p className="text-sm font-medium text-zinc-200">
+                                {security.rules?.length || 0} rules configured
+                            </p>
+                            <p className="text-xs text-zinc-400 mt-1">
+                                Style: {security.securityStyle === "ANNOTATION" ? "@PreAuthorize" : "SecurityFilterChain"}
+                            </p>
+                        </div>
+
+                        {/* Features */}
+                        <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4">
+                            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Features</p>
+                            <div className="flex gap-1 flex-wrap">
+                                {security.passwordResetEnabled && (
+                                    <Badge variant="secondary" className="text-[10px]">Password Reset</Badge>
+                                )}
+                                {security.registrationEnabled && (
+                                    <Badge variant="secondary" className="text-[10px]">Registration</Badge>
+                                )}
+                                {security.testUsersEnabled && (
+                                    <Badge variant="secondary" className="text-[10px]">Test Users</Badge>
+                                )}
+                                {!security.passwordResetEnabled && !security.registrationEnabled && !security.testUsersEnabled && (
+                                    <p className="text-xs text-zinc-500">None enabled</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </motion.div>
 
                 {/* ── Navigation ──────────────────────────────────────────────── */}
