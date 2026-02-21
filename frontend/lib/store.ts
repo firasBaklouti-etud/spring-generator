@@ -41,6 +41,7 @@ export interface SpringConfig {
   packaging: "jar" | "war"
   projectStructure: ProjectStructure
   migrationTool: "none" | "flyway" | "liquibase"
+  configFormat: "properties" | "yml"
 }
 
 export interface NodeConfig {
@@ -288,6 +289,7 @@ const defaultSpringConfig: SpringConfig = {
   packaging: "jar",
   projectStructure: "LAYERED",
   migrationTool: "none",
+  configFormat: "properties",
 }
 
 const defaultNodeConfig: NodeConfig = {

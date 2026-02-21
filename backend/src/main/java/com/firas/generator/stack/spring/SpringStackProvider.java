@@ -81,10 +81,21 @@ public class SpringStackProvider implements StackProvider {
         try {
         
         // Generate project structure files
-        files.add(generatePom(request));
+        SpringConfig springConfig = request.getEffectiveSpringConfig();
+        if ("gradle".equalsIgnoreCase(springConfig.getBuildTool())) {
+            files.add(generateGradleBuild(request));
+            files.add(generateSettingsGradle(request));
+        } else {
+            files.add(generatePom(request));
+        }
         files.add(generateMainClass(request));
-        files.add(generateApplicationProperties(request));
-        files.add(generateApplicationDevProperties(request));
+        if ("yml".equalsIgnoreCase(springConfig.getConfigFormat())) {
+            files.add(generateApplicationYml(request));
+            files.add(generateApplicationDevYml(request));
+        } else {
+            files.add(generateApplicationProperties(request));
+            files.add(generateApplicationDevProperties(request));
+        }
         files.add(generateGitignore());
 
         // Handle security configuration specific table modifications
@@ -533,6 +544,89 @@ public class SpringStackProvider implements StackProvider {
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.properties.ftl", model);
         return new FilePreview("src/main/resources/application-dev.properties", content, "properties");
+    }
+
+    /**
+     * Generates the Gradle build.gradle file.
+     */
+    private FilePreview generateGradleBuild(ProjectRequest request) {
+        SpringConfig config = request.getEffectiveSpringConfig();
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", config);
+
+        List<DependencyMetadata> dependencies = request.getDependencies();
+        if (dependencies == null) {
+            dependencies = new ArrayList<>();
+        }
+        model.put("dependencies", dependencies);
+
+        boolean hasLombok = dependencies.stream()
+                .anyMatch(dep -> "lombok".equals(dep.getId()));
+        model.put("hasLombok", hasLombok);
+
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+
+        boolean hasSocialLogins = request.getSecurityConfig() != null
+                && request.getSecurityConfig().getSocialLogins() != null
+                && !request.getSecurityConfig().getSocialLogins().isEmpty();
+        model.put("hasSocialLogins", hasSocialLogins);
+
+        boolean hasKeycloak = request.getSecurityConfig() != null
+                && (request.getSecurityConfig().isKeycloakEnabled()
+                    || "KEYCLOAK_RS".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType())
+                    || "KEYCLOAK_OAUTH".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType()));
+        model.put("hasKeycloak", hasKeycloak);
+
+        boolean hasPasswordReset = request.getSecurityConfig() != null
+                && request.getSecurityConfig().isPasswordResetEnabled();
+        model.put("hasPasswordReset", hasPasswordReset);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "build.gradle.ftl", model);
+        return new FilePreview("build.gradle", content, "gradle");
+    }
+
+    /**
+     * Generates the Gradle settings.gradle file.
+     */
+    private FilePreview generateSettingsGradle(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "settings.gradle.ftl", model);
+        return new FilePreview("settings.gradle", content, "gradle");
+    }
+
+    /**
+     * Generates the application.yml file.
+     */
+    private FilePreview generateApplicationYml(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.yml.ftl", model);
+        return new FilePreview("src/main/resources/application.yml", content, "yaml");
+    }
+
+    /**
+     * Generates the application-dev.yml file with H2 in-memory database for development.
+     */
+    private FilePreview generateApplicationDevYml(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.yml.ftl", model);
+        return new FilePreview("src/main/resources/application-dev.yml", content, "yaml");
     }
 
     /**

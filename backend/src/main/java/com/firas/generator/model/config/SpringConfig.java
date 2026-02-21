@@ -36,6 +36,9 @@ public class SpringConfig {
     /** Database migration tool: "none", "flyway", or "liquibase" */
     private String migrationTool = "none";
 
+    /** Configuration format: "properties" or "yml" */
+    private String configFormat = "properties";
+
     // Constructors
     public SpringConfig() {}
     
@@ -68,4 +71,7 @@ public class SpringConfig {
 
     public String getMigrationTool() { return migrationTool; }
     public void setMigrationTool(String migrationTool) { this.migrationTool = migrationTool; }
+
+    public String getConfigFormat() { return configFormat; }
+    public void setConfigFormat(String configFormat) { this.configFormat = configFormat; }
 }
