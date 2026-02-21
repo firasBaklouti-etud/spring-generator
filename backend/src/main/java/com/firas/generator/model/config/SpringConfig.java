@@ -39,6 +39,9 @@ public class SpringConfig {
     /** Configuration format: "properties" or "yml" */
     private String configFormat = "properties";
 
+    /** Database type: "mysql", "postgresql", "mongodb", etc. */
+    private String databaseType;
+
     // Constructors
     public SpringConfig() {}
     
@@ -74,4 +77,7 @@ public class SpringConfig {
 
     public String getConfigFormat() { return configFormat; }
     public void setConfigFormat(String configFormat) { this.configFormat = configFormat; }
+
+    public String getDatabaseType() { return databaseType; }
+    public void setDatabaseType(String databaseType) { this.databaseType = databaseType; }
 }

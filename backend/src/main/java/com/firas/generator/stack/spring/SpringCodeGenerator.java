@@ -70,6 +70,14 @@ public class SpringCodeGenerator implements CodeGenerator {
         }
         return ProjectStructure.LAYERED;
     }
+
+    /**
+     * Checks if the current database type is MongoDB.
+     */
+    private boolean isMongoDB() {
+        SpringConfig config = springConfig.get();
+        return config != null && "mongodb".equalsIgnoreCase(config.getDatabaseType());
+    }
     
     /**
      * Generates the file path based on the project structure.
@@ -164,7 +172,7 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "entity");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "entity");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Entity.ftl", model);
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoEntity.ftl" : "Entity.ftl"), model);
         String path = generatePath(packageName, table, "entity", "", false);
         
         return new FilePreview(path, content, "java");
@@ -175,7 +183,7 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "repository");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "repository");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Repository.ftl", model);
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoRepository.ftl" : "Repository.ftl"), model);
         String path = generatePath(packageName, table, "repository", "Repository", false);
         
         return new FilePreview(path, content, "java");
@@ -186,7 +194,7 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "service");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "service");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Service.ftl", model);
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoService.ftl" : "Service.ftl"), model);
         String path = generatePath(packageName, table, "service", "Service", false);
         
         return new FilePreview(path, content, "java");

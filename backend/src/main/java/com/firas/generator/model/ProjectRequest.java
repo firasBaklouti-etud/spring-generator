@@ -230,6 +230,7 @@ public class ProjectRequest {
         if (artifactId != null) config.setArtifactId(artifactId);
         if (javaVersion != null) config.setJavaVersion(javaVersion);
         if (bootVersion != null) config.setBootVersion(bootVersion);
+        if (databaseType != null) config.setDatabaseType(databaseType);
         
         return config;
     }
