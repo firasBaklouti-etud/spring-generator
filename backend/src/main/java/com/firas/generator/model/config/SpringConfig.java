@@ -42,6 +42,9 @@ public class SpringConfig {
     /** Database type: "mysql", "postgresql", "mongodb", etc. */
     private String databaseType;
 
+    /** Programming language: "java" or "kotlin" */
+    private String language = "java";
+
     // Constructors
     public SpringConfig() {}
     
@@ -80,4 +83,7 @@ public class SpringConfig {
 
     public String getDatabaseType() { return databaseType; }
     public void setDatabaseType(String databaseType) { this.databaseType = databaseType; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
 }

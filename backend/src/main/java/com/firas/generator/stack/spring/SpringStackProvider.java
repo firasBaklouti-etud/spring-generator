@@ -539,12 +539,21 @@ public class SpringStackProvider implements StackProvider {
         
         String className = toClassName(request.getName()) + "Application";
         model.put("className", className);
-        
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Application.java.ftl", model);
-        String packagePath = request.getPackageName().replace(".", "/");
-        String path = "src/main/java/" + packagePath + "/" + className + ".java";
-        
-        return new FilePreview(path, content, "java");
+
+        SpringConfig config = request.getEffectiveSpringConfig();
+        boolean isKotlin = "kotlin".equalsIgnoreCase(config.getLanguage());
+
+        if (isKotlin) {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "kotlin/Application.kt.ftl", model);
+            String packagePath = request.getPackageName().replace(".", "/");
+            String path = "src/main/kotlin/" + packagePath + "/" + className + ".kt";
+            return new FilePreview(path, content, "kotlin");
+        } else {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "Application.java.ftl", model);
+            String packagePath = request.getPackageName().replace(".", "/");
+            String path = "src/main/java/" + packagePath + "/" + className + ".java";
+            return new FilePreview(path, content, "java");
+        }
     }
     
     /**

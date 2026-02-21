@@ -78,6 +78,21 @@ public class SpringCodeGenerator implements CodeGenerator {
         SpringConfig config = springConfig.get();
         return config != null && "mongodb".equalsIgnoreCase(config.getDatabaseType());
     }
+
+    /**
+     * Checks if the current language is Kotlin.
+     */
+    private boolean isKotlin() {
+        SpringConfig config = springConfig.get();
+        return config != null && "kotlin".equalsIgnoreCase(config.getLanguage());
+    }
+
+    /**
+     * Returns the file extension based on the current language.
+     */
+    private String getFileExtension() {
+        return isKotlin() ? ".kt" : ".java";
+    }
     
     /**
      * Generates the file path based on the project structure.
@@ -90,11 +105,13 @@ public class SpringCodeGenerator implements CodeGenerator {
      * @return The file path
      */
     private String generatePath(String packageName, Table table, String fileType, String suffix, boolean isTest) {
-        String baseDir = isTest ? "src/test/java/" : "src/main/java/";
+        String sourceDir = isKotlin() ? "src/main/kotlin/" : "src/main/java/";
+        String testDir = isKotlin() ? "src/test/kotlin/" : "src/test/java/";
+        String baseDir = isTest ? testDir : sourceDir;
         String packagePath = packageName.replace(".", "/");
         String className = table.getClassName();
         String featureName = className.toLowerCase();
-        String fileName = className + suffix + ".java";
+        String fileName = className + suffix + getFileExtension();
         
         ProjectStructure structure = getProjectStructure();
         
@@ -172,10 +189,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "entity");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "entity");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoEntity.ftl" : "Entity.ftl"), model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Entity.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoEntity.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Entity.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "entity", "", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -183,10 +208,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "repository");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "repository");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoRepository.ftl" : "Repository.ftl"), model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Repository.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoRepository.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Repository.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "repository", "Repository", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -194,10 +227,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "service");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "service");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + (isMongoDB() ? "MongoService.ftl" : "Service.ftl"), model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Service.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoService.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Service.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "service", "Service", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -233,10 +274,11 @@ public class SpringCodeGenerator implements CodeGenerator {
             model.put("securityEnabled", false);
         }
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Controller.ftl", model);
+        String template = isKotlin() ? TEMPLATE_DIR + "kotlin/Controller.kt.ftl" : TEMPLATE_DIR + "Controller.ftl";
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "controller", "Controller", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
