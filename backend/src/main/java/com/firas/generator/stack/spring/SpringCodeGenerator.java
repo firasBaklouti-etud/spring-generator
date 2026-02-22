@@ -70,6 +70,29 @@ public class SpringCodeGenerator implements CodeGenerator {
         }
         return ProjectStructure.LAYERED;
     }
+
+    /**
+     * Checks if the current database type is MongoDB.
+     */
+    private boolean isMongoDB() {
+        SpringConfig config = springConfig.get();
+        return config != null && "mongodb".equalsIgnoreCase(config.getDatabaseType());
+    }
+
+    /**
+     * Checks if the current language is Kotlin.
+     */
+    private boolean isKotlin() {
+        SpringConfig config = springConfig.get();
+        return config != null && "kotlin".equalsIgnoreCase(config.getLanguage());
+    }
+
+    /**
+     * Returns the file extension based on the current language.
+     */
+    private String getFileExtension() {
+        return isKotlin() ? ".kt" : ".java";
+    }
     
     /**
      * Generates the file path based on the project structure.
@@ -82,11 +105,13 @@ public class SpringCodeGenerator implements CodeGenerator {
      * @return The file path
      */
     private String generatePath(String packageName, Table table, String fileType, String suffix, boolean isTest) {
-        String baseDir = isTest ? "src/test/java/" : "src/main/java/";
+        String sourceDir = isKotlin() ? "src/main/kotlin/" : "src/main/java/";
+        String testDir = isKotlin() ? "src/test/kotlin/" : "src/test/java/";
+        String baseDir = isTest ? testDir : sourceDir;
         String packagePath = packageName.replace(".", "/");
         String className = table.getClassName();
         String featureName = className.toLowerCase();
-        String fileName = className + suffix + ".java";
+        String fileName = className + suffix + getFileExtension();
         
         ProjectStructure structure = getProjectStructure();
         
@@ -164,10 +189,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "entity");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "entity");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Entity.ftl", model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Entity.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoEntity.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Entity.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "entity", "", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -175,10 +208,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "repository");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "repository");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Repository.ftl", model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Repository.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoRepository.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Repository.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "repository", "Repository", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -186,10 +227,18 @@ public class SpringCodeGenerator implements CodeGenerator {
         String effectivePackage = getEffectivePackage(packageName, table, "service");
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "service");
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Service.ftl", model);
+        String template;
+        if (isKotlin()) {
+            template = TEMPLATE_DIR + "kotlin/Service.kt.ftl";
+        } else if (isMongoDB()) {
+            template = TEMPLATE_DIR + "MongoService.ftl";
+        } else {
+            template = TEMPLATE_DIR + "Service.ftl";
+        }
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "service", "Service", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -225,10 +274,11 @@ public class SpringCodeGenerator implements CodeGenerator {
             model.put("securityEnabled", false);
         }
         
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Controller.ftl", model);
+        String template = isKotlin() ? TEMPLATE_DIR + "kotlin/Controller.kt.ftl" : TEMPLATE_DIR + "Controller.ftl";
+        String content = templateService.processTemplateToString(template, model);
         String path = generatePath(packageName, table, "controller", "Controller", false);
         
-        return new FilePreview(path, content, "java");
+        return new FilePreview(path, content, isKotlin() ? "kotlin" : "java");
     }
     
     @Override
@@ -248,6 +298,19 @@ public class SpringCodeGenerator implements CodeGenerator {
         Map<String, Object> model = createModel(table, packageName, effectivePackage, "mapper");
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "Mapper.ftl", model);
+        String path = generatePath(packageName, table, "mapper", "Mapper", false);
+
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates a MapStruct-based mapper interface for a table.
+     */
+    public FilePreview generateMapStructMapper(Table table, String packageName) {
+        String effectivePackage = getEffectivePackage(packageName, table, "mapper");
+        Map<String, Object> model = createModel(table, packageName, effectivePackage, "mapper");
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "MapStructMapper.ftl", model);
         String path = generatePath(packageName, table, "mapper", "Mapper", false);
 
         return new FilePreview(path, content, "java");
@@ -284,6 +347,27 @@ public class SpringCodeGenerator implements CodeGenerator {
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "ControllerTest.ftl", model);
         String path = generatePath(packageName, table, "controller", "ControllerTest", true);
+
+        return new FilePreview(path, content, "java");
+    }
+
+    /**
+     * Generates a Rest-Assured based controller test for a table.
+     */
+    public FilePreview generateRestAssuredTest(Table table, String packageName) {
+        String effectivePackage = getEffectivePackage(packageName, table, "controller");
+        Map<String, Object> model = createModel(table, packageName, effectivePackage, "controller");
+
+        SecurityConfig secConfig = securityConfig.get();
+        if (secConfig != null && secConfig.isEnabled()) {
+            model.put("securityEnabled", true);
+            model.put("authType", secConfig.getAuthenticationType());
+        } else {
+            model.put("securityEnabled", false);
+        }
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "RestAssuredTest.ftl", model);
+        String path = generatePath(packageName, table, "controller", "RestAssuredTest", true);
 
         return new FilePreview(path, content, "java");
     }

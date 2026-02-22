@@ -7,6 +7,9 @@
 .vscode/
 *.iml
 
+# Dependencies
+node_modules/
+
 # Test outputs
 test-output/
 *.zip
