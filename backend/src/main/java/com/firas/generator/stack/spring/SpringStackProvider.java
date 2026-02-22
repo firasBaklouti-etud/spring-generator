@@ -81,10 +81,21 @@ public class SpringStackProvider implements StackProvider {
         try {
         
         // Generate project structure files
-        files.add(generatePom(request));
+        SpringConfig springConfig = request.getEffectiveSpringConfig();
+        if ("gradle".equalsIgnoreCase(springConfig.getBuildTool())) {
+            files.add(generateGradleBuild(request));
+            files.add(generateSettingsGradle(request));
+        } else {
+            files.add(generatePom(request));
+        }
         files.add(generateMainClass(request));
-        files.add(generateApplicationProperties(request));
-        files.add(generateApplicationDevProperties(request));
+        if ("yml".equalsIgnoreCase(springConfig.getConfigFormat())) {
+            files.add(generateApplicationYml(request));
+            files.add(generateApplicationDevYml(request));
+        } else {
+            files.add(generateApplicationProperties(request));
+            files.add(generateApplicationDevProperties(request));
+        }
         files.add(generateGitignore());
 
         // Handle security configuration specific table modifications
@@ -238,6 +249,23 @@ public class SpringStackProvider implements StackProvider {
         if (request.getTables() != null && !request.getTables().isEmpty()) {
             boolean includeDto = request.isIncludeDto() || request.isIncludeController() || request.isIncludeService();
             boolean includeMapper = request.isIncludeMapper() || includeDto;
+
+            // Check for MapStruct in dependencies
+            List<DependencyMetadata> deps = request.getDependencies();
+            boolean hasMapStruct = deps != null && deps.stream()
+                    .anyMatch(dep -> "mapstruct".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("mapstruct")));
+
+            // Check for Rest-Assured in dependencies
+            boolean hasRestAssured = deps != null && deps.stream()
+                    .anyMatch(dep -> "rest-assured".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("rest-assured")));
+
+            // Check for Testcontainers in dependencies
+            boolean hasTestcontainers = deps != null && deps.stream()
+                    .anyMatch(dep -> "testcontainers".equals(dep.getId())
+                            || (dep.getArtifactId() != null && dep.getArtifactId().contains("testcontainers")));
+
             for (Table table : request.getTables()) {
                 if (table.isJoinTable()) {
                     continue; // Skip join tables
@@ -259,7 +287,11 @@ public class SpringStackProvider implements StackProvider {
                     files.add(codeGenerator.generateDto(table, request.getPackageName()));
                 }
                 if (includeMapper) {
-                    files.add(codeGenerator.generateMapper(table, request.getPackageName()));
+                    if (hasMapStruct) {
+                        files.add(codeGenerator.generateMapStructMapper(table, request.getPackageName()));
+                    } else {
+                        files.add(codeGenerator.generateMapper(table, request.getPackageName()));
+                    }
                 }
                 
                 // Generate tests if enabled
@@ -268,9 +300,18 @@ public class SpringStackProvider implements StackProvider {
                         files.add(codeGenerator.generateRepositoryTest(table, request.getPackageName()));
                     }
                     if (request.isIncludeController()) {
-                        files.add(codeGenerator.generateControllerTest(table, request.getPackageName()));
+                        if (hasRestAssured) {
+                            files.add(codeGenerator.generateRestAssuredTest(table, request.getPackageName()));
+                        } else {
+                            files.add(codeGenerator.generateControllerTest(table, request.getPackageName()));
+                        }
                     }
                 }
+            }
+
+            // Generate Testcontainers config if enabled
+            if (request.isIncludeTests() && hasTestcontainers) {
+                files.addAll(generateTestcontainersFiles(request));
             }
         }
         
@@ -498,12 +539,21 @@ public class SpringStackProvider implements StackProvider {
         
         String className = toClassName(request.getName()) + "Application";
         model.put("className", className);
-        
-        String content = templateService.processTemplateToString(TEMPLATE_DIR + "Application.java.ftl", model);
-        String packagePath = request.getPackageName().replace(".", "/");
-        String path = "src/main/java/" + packagePath + "/" + className + ".java";
-        
-        return new FilePreview(path, content, "java");
+
+        SpringConfig config = request.getEffectiveSpringConfig();
+        boolean isKotlin = "kotlin".equalsIgnoreCase(config.getLanguage());
+
+        if (isKotlin) {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "kotlin/Application.kt.ftl", model);
+            String packagePath = request.getPackageName().replace(".", "/");
+            String path = "src/main/kotlin/" + packagePath + "/" + className + ".kt";
+            return new FilePreview(path, content, "kotlin");
+        } else {
+            String content = templateService.processTemplateToString(TEMPLATE_DIR + "Application.java.ftl", model);
+            String packagePath = request.getPackageName().replace(".", "/");
+            String path = "src/main/java/" + packagePath + "/" + className + ".java";
+            return new FilePreview(path, content, "java");
+        }
     }
     
     /**
@@ -533,6 +583,89 @@ public class SpringStackProvider implements StackProvider {
 
         String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.properties.ftl", model);
         return new FilePreview("src/main/resources/application-dev.properties", content, "properties");
+    }
+
+    /**
+     * Generates the Gradle build.gradle file.
+     */
+    private FilePreview generateGradleBuild(ProjectRequest request) {
+        SpringConfig config = request.getEffectiveSpringConfig();
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", config);
+
+        List<DependencyMetadata> dependencies = request.getDependencies();
+        if (dependencies == null) {
+            dependencies = new ArrayList<>();
+        }
+        model.put("dependencies", dependencies);
+
+        boolean hasLombok = dependencies.stream()
+                .anyMatch(dep -> "lombok".equals(dep.getId()));
+        model.put("hasLombok", hasLombok);
+
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+
+        boolean hasSocialLogins = request.getSecurityConfig() != null
+                && request.getSecurityConfig().getSocialLogins() != null
+                && !request.getSecurityConfig().getSocialLogins().isEmpty();
+        model.put("hasSocialLogins", hasSocialLogins);
+
+        boolean hasKeycloak = request.getSecurityConfig() != null
+                && (request.getSecurityConfig().isKeycloakEnabled()
+                    || "KEYCLOAK_RS".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType())
+                    || "KEYCLOAK_OAUTH".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType()));
+        model.put("hasKeycloak", hasKeycloak);
+
+        boolean hasPasswordReset = request.getSecurityConfig() != null
+                && request.getSecurityConfig().isPasswordResetEnabled();
+        model.put("hasPasswordReset", hasPasswordReset);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "build.gradle.ftl", model);
+        return new FilePreview("build.gradle", content, "gradle");
+    }
+
+    /**
+     * Generates the Gradle settings.gradle file.
+     */
+    private FilePreview generateSettingsGradle(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "settings.gradle.ftl", model);
+        return new FilePreview("settings.gradle", content, "gradle");
+    }
+
+    /**
+     * Generates the application.yml file.
+     */
+    private FilePreview generateApplicationYml(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        boolean hasJwt = request.getSecurityConfig() != null
+                && "JWT".equalsIgnoreCase(request.getSecurityConfig().getAuthenticationType());
+        model.put("hasJwt", hasJwt);
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application.yml.ftl", model);
+        return new FilePreview("src/main/resources/application.yml", content, "yaml");
+    }
+
+    /**
+     * Generates the application-dev.yml file with H2 in-memory database for development.
+     */
+    private FilePreview generateApplicationDevYml(ProjectRequest request) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("request", request);
+        model.put("springConfig", request.getEffectiveSpringConfig());
+
+        String content = templateService.processTemplateToString(TEMPLATE_DIR + "application-dev.yml.ftl", model);
+        return new FilePreview("src/main/resources/application-dev.yml", content, "yaml");
     }
 
     /**
@@ -850,6 +983,7 @@ public class SpringStackProvider implements StackProvider {
         if (hasSocialLogins && security.getPrincipalEntity() != null) {
             Map<String, Object> socialModel = new HashMap<>();
             socialModel.put("packageName", request.getPackageName());
+            socialModel.put("security", security);
             socialModel.put("principalEntity", security.getPrincipalEntity());
             socialModel.put("usernameField", security.getUsernameField());
             socialModel.put("passwordField", security.getPasswordField());
@@ -857,11 +991,94 @@ public class SpringStackProvider implements StackProvider {
             String oauthServiceContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2UserService.ftl", socialModel);
             files.add(new FilePreview(basePath + "security/CustomOAuth2UserService.java", oauthServiceContent, "java"));
 
+            // OAuth2LoginConfig (client registration for social providers)
+            String oauthConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/OAuth2LoginConfig.ftl", socialModel);
+            files.add(new FilePreview(basePath + "config/OAuth2LoginConfig.java", oauthConfigContent, "java"));
+
             // Social auth controller (for JWT token exchange after OAuth2 callback)
             if ("JWT".equalsIgnoreCase(security.getAuthenticationType())) {
                 String socialControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SocialAuthController.ftl", socialModel);
                 files.add(new FilePreview(basePath + "controller/SocialAuthController.java", socialControllerContent, "java"));
             }
+        }
+
+        // 9. Form-Based Login components (if FORM_LOGIN auth type)
+        if ("FORM_LOGIN".equalsIgnoreCase(security.getAuthenticationType())) {
+            Map<String, Object> formModel = new HashMap<>();
+            formModel.put("packageName", request.getPackageName());
+            formModel.put("security", security);
+
+            // FormLoginSecurityConfig (overrides default SecurityConfig for form-based auth)
+            String formSecConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/FormLoginSecurityConfig.ftl", formModel);
+            files.add(new FilePreview(basePath + "config/FormLoginSecurityConfig.java", formSecConfigContent, "java"));
+
+            // MVC Authentication Controller (login/logout pages)
+            String authMvcContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/AuthenticationController.ftl", formModel);
+            files.add(new FilePreview(basePath + "controller/AuthenticationController.java", authMvcContent, "java"));
+
+            // Thymeleaf login template
+            String loginHtmlContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/login.html.ftl", formModel);
+            files.add(new FilePreview("src/main/resources/templates/login.html", loginHtmlContent, "html"));
+
+            // Registration Controller (if registration enabled)
+            boolean regEnabled = security.isRegistrationEnabled();
+            if (regEnabled && security.getPrincipalEntity() != null) {
+                String regControllerContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/RegistrationController.ftl", formModel);
+                files.add(new FilePreview(basePath + "controller/RegistrationController.java", regControllerContent, "java"));
+            }
+        }
+
+        // 10. Keycloak OAuth/OIDC components (if KEYCLOAK_OAUTH auth type)
+        if ("KEYCLOAK_OAUTH".equalsIgnoreCase(security.getAuthenticationType())) {
+            Map<String, Object> kcModel = new HashMap<>();
+            kcModel.put("packageName", request.getPackageName());
+            kcModel.put("security", security);
+
+            // KeycloakOAuthConfig
+            String kcOAuthContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/KeycloakOAuthConfig.ftl", kcModel);
+            files.add(new FilePreview(basePath + "config/KeycloakOAuthConfig.java", kcOAuthContent, "java"));
+
+            // UserSynchronizationService (sync Keycloak users to local DB)
+            if (security.getPrincipalEntity() != null) {
+                String userSyncContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/UserSynchronizationService.ftl", kcModel);
+                files.add(new FilePreview(basePath + "service/UserSynchronizationService.java", userSyncContent, "java"));
+            }
+        }
+
+        // 11. Keycloak realm export and docker-compose (if any Keycloak mode)
+        boolean isKeycloak = "KEYCLOAK_RS".equalsIgnoreCase(security.getAuthenticationType())
+                || "KEYCLOAK_OAUTH".equalsIgnoreCase(security.getAuthenticationType());
+        if (isKeycloak) {
+            Map<String, Object> kcDockerModel = new HashMap<>();
+            kcDockerModel.put("security", security);
+
+            // keycloak-realm.json
+            String realmContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/keycloak-realm.json.ftl", kcDockerModel);
+            files.add(new FilePreview("src/main/resources/keycloak-realm.json", realmContent, "json"));
+
+            // docker-compose.keycloak.yml
+            String kcComposeContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/docker-compose.keycloak.yml.ftl", kcDockerModel);
+            files.add(new FilePreview("docker-compose.keycloak.yml", kcComposeContent, "yaml"));
+        }
+
+        // 12. Integration Test Helpers (if test users enabled)
+        if (security.isTestUsersEnabled()) {
+            Map<String, Object> testModel = new HashMap<>();
+            testModel.put("packageName", request.getPackageName());
+            testModel.put("security", security);
+
+            // BaseIT - Base integration test class
+            String baseItContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/BaseIT.ftl", testModel);
+            String testBasePath = "src/test/java/" + request.getPackageName().replace(".", "/") + "/";
+            files.add(new FilePreview(testBasePath + "BaseIT.java", baseItContent, "java"));
+
+            // SecurityTestConfig
+            String secTestConfigContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/SecurityTestConfig.ftl", testModel);
+            files.add(new FilePreview(testBasePath + "config/SecurityTestConfig.java", secTestConfigContent, "java"));
+
+            // Test user SQL seed script
+            String testUsersContent = templateService.processTemplateToString(TEMPLATE_DIR + "security/test-users.sql.ftl", testModel);
+            files.add(new FilePreview("src/test/resources/test-users.sql", testUsersContent, "sql"));
         }
 
         return files;
@@ -936,6 +1153,29 @@ public class SpringStackProvider implements StackProvider {
             String changesetContent = templateService.processTemplateToString(TEMPLATE_DIR + "migration/001-init-schema.xml.ftl", model);
             files.add(new FilePreview("src/main/resources/db/changelog/001-init-schema.xml", changesetContent, "xml"));
         }
+
+        return files;
+    }
+
+    /**
+     * Generates Testcontainers configuration and base test class.
+     */
+    private List<FilePreview> generateTestcontainersFiles(ProjectRequest request) {
+        List<FilePreview> files = new ArrayList<>();
+        String testBasePath = "src/test/java/" + request.getPackageName().replace(".", "/") + "/";
+
+        Map<String, Object> model = new HashMap<>();
+        model.put("packageName", request.getPackageName());
+        model.put("request", request);
+        model.put("databaseType", request.getDatabaseType() != null ? request.getDatabaseType() : "h2");
+
+        // TestcontainersConfig
+        String configContent = templateService.processTemplateToString(TEMPLATE_DIR + "TestcontainersConfig.ftl", model);
+        files.add(new FilePreview(testBasePath + "TestcontainersConfig.java", configContent, "java"));
+
+        // TestcontainersTest base class
+        String baseTestContent = templateService.processTemplateToString(TEMPLATE_DIR + "TestcontainersTest.ftl", model);
+        files.add(new FilePreview(testBasePath + "TestcontainersTest.java", baseTestContent, "java"));
 
         return files;
     }

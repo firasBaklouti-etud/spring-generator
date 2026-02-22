@@ -36,6 +36,15 @@ public class SpringConfig {
     /** Database migration tool: "none", "flyway", or "liquibase" */
     private String migrationTool = "none";
 
+    /** Configuration format: "properties" or "yml" */
+    private String configFormat = "properties";
+
+    /** Database type: "mysql", "postgresql", "mongodb", etc. */
+    private String databaseType;
+
+    /** Programming language: "java" or "kotlin" */
+    private String language = "java";
+
     // Constructors
     public SpringConfig() {}
     
@@ -68,4 +77,13 @@ public class SpringConfig {
 
     public String getMigrationTool() { return migrationTool; }
     public void setMigrationTool(String migrationTool) { this.migrationTool = migrationTool; }
+
+    public String getConfigFormat() { return configFormat; }
+    public void setConfigFormat(String configFormat) { this.configFormat = configFormat; }
+
+    public String getDatabaseType() { return databaseType; }
+    public void setDatabaseType(String databaseType) { this.databaseType = databaseType; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
 }

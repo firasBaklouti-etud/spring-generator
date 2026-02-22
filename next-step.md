@@ -35,7 +35,7 @@ This is the user's primary pain point. Both the generated code and the UI need i
   - [x] `staticUserFallback` (boolean - if no user table, create in-memory users)
   - [x] `testUsersEnabled` (boolean)
 
-### 1B. New Security Templates (Backend) [/]
+### 1B. New Security Templates (Backend) [x]
 
 **New FreeMarker templates to create in `backend/src/main/resources/templates/spring/security/`:**
 
@@ -44,22 +44,22 @@ This is the user's primary pain point. Both the generated code and the UI need i
    - [x] Update existing `JwtUtil.ftl` to conditionally use HS256 or RS256
 
 2. [x] **Social Login:**
-   - [ ] `OAuth2LoginConfig.ftl` - Spring Security OAuth2 login config for Google/GitHub/Facebook (Partially handled)
+   - [x] `OAuth2LoginConfig.ftl` - Spring Security OAuth2 login config for Google/GitHub/Facebook
    - [x] `OAuth2UserService.ftl` - Custom OAuth2UserService to map social profiles to local users
    - [x] `SocialAuthController.ftl` - Endpoint to handle social login code exchange for JWT
 
-3. [ ] **Form-Based Login:**
-   - [ ] `FormLoginSecurityConfig.ftl` - Security config for form-based SSR authentication
-   - [ ] `AuthenticationController.ftl` - MVC controller for login/logout pages (Thymeleaf)
-   - [ ] `login.html.ftl` - Thymeleaf login template
-   - [ ] `RegistrationController.ftl` - MVC controller for registration page
+3. [x] **Form-Based Login:**
+   - [x] `FormLoginSecurityConfig.ftl` - Security config for form-based SSR authentication
+   - [x] `AuthenticationController.ftl` - MVC controller for login/logout pages (Thymeleaf)
+   - [x] `login.html.ftl` - Thymeleaf login template
+   - [x] `RegistrationController.ftl` - MVC controller for registration page
 
 4. [x] **Keycloak Integration:**
    - [x] `KeycloakResourceServerConfig.ftl` - Security config as resource server (Integrated)
-   - [ ] `KeycloakOAuthConfig.ftl` - Security config for OAuth/OIDC client
-   - [ ] `keycloak-realm.json.ftl` - Realm export template
-   - [ ] `docker-compose.keycloak.yml.ftl` - Docker compose snippet
-   - [ ] `UserSynchronizationService.ftl` - Sync Keycloak users to local DB
+   - [x] `KeycloakOAuthConfig.ftl` - Security config for OAuth/OIDC client
+   - [x] `keycloak-realm.json.ftl` - Realm export template
+   - [x] `docker-compose.keycloak.yml.ftl` - Docker compose snippet
+   - [x] `UserSynchronizationService.ftl` - Sync Keycloak users to local DB
 
 5. [x] **Password Reset:**
    - [x] `PasswordResetService.ftl` - Token generation, validation, expiry logic
@@ -76,10 +76,10 @@ This is the user's primary pain point. Both the generated code and the UI need i
    - [x] Update `SecurityConfig.ftl` to include `rememberMe(...)` configuration
    - [x] Generate cookie settings and token repository if needed
 
-8. [ ] **Integration Test Helpers:**
-   - [ ] `BaseIT.ftl` - Base integration test class with authenticated session/bearer token helpers
-   - [ ] `SecurityTestConfig.ftl` - Test security configuration
-   - [ ] Test user SQL seed scripts
+8. [x] **Integration Test Helpers:**
+   - [x] `BaseIT.ftl` - Base integration test class with authenticated session/bearer token helpers
+   - [x] `SecurityTestConfig.ftl` - Test security configuration
+   - [x] Test user SQL seed scripts
 
 9. [x] **Annotation-Based Security Option:**
    - [x] Update `Controller.ftl` to conditionally add `@PreAuthorize` annotations
@@ -106,7 +106,7 @@ This is the user's primary pain point. Both the generated code and the UI need i
 - [x] 5. **Password Reset Section** (Enable toggle, Token/Expiry field selectors)
 - [x] 6. **Security Style Toggle** (Annotation vs Config)
 - [x] 7. **Test Users Section**
-- [ ] 8. **Live Preview Panel**
+- [x] 8. **Live Preview Panel**
 
 **Store updates in `frontend/lib/store.ts`:**
 - [x] Add all new SecurityConfig fields to the store interface
@@ -115,14 +115,14 @@ This is the user's primary pain point. Both the generated code and the UI need i
 
 ## Phase 2: General Feature Additions (Priority - MEDIUM)
 
-### 2A. Gradle Support [ ]
-### 2B. Kotlin Support [ ]
-### 2C. application.yml Support [ ]
+### 2A. Gradle Support [x]
+### 2B. Kotlin Support [x]
+### 2C. application.yml Support [x]
 ### 2D. Lombok Support [x]
-### 2E. MongoDB Support [ ]
-### 2F. MapStruct Integration [ ]
-### 2G. Testcontainers Support [ ]
-### 2H. Rest-Assured Support [ ]
+### 2E. MongoDB Support [x]
+### 2F. MapStruct Integration [x]
+### 2G. Testcontainers Support [x]
+### 2H. Rest-Assured Support [x]
 
 ---
 
@@ -144,15 +144,15 @@ This is the user's primary pain point. Both the generated code and the UI need i
 6. [x] **Registration toggle + static user fallback** (Implemented in model and templates)
 7. [x] **Annotation-based vs config-based security**
 8. [x] **Frontend Security UI overhaul**
-9. [ ] **Keycloak integration** (Only basic RS support exists)
-10. [ ] **Form-based login**
+9. [x] **Keycloak integration**
+10. [x] **Form-based login**
 11. [x] **Remember-me**
-12. [ ] **Integration test helpers**
-13. [ ] **Gradle support**
-14. [ ] **application.yml format**
+12. [x] **Integration test helpers**
+13. [x] **Gradle support**
+14. [x] **application.yml format**
 15. [x] **Lombok support**
-16. [ ] **Kotlin support**
-17. [ ] **MapStruct**
-18. [ ] **MongoDB support**
-19. [ ] **Testcontainers**
-20. [ ] **Rest-Assured**
+16. [x] **Kotlin support**
+17. [x] **MapStruct**
+18. [x] **MongoDB support**
+19. [x] **Testcontainers**
+20. [x] **Rest-Assured**
