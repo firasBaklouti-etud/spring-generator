@@ -92,6 +92,9 @@ public class ProjectRequest {
     /** Security configuration */
     private SecurityConfig securityConfig;
 
+    /** Frontend generation configuration */
+    private FrontendConfig frontendConfig;
+
     
     // ==================== Legacy Fields (Backward Compatibility) ====================
     // These fields are kept for backward compatibility with existing frontend
@@ -173,6 +176,9 @@ public class ProjectRequest {
     public SecurityConfig getSecurityConfig() { return securityConfig; }
     public void setSecurityConfig(SecurityConfig securityConfig) { this.securityConfig = securityConfig; }
 
+    public FrontendConfig getFrontendConfig() { return frontendConfig; }
+    public void setFrontendConfig(FrontendConfig frontendConfig) { this.frontendConfig = frontendConfig; }
+
     
     // ==================== Legacy Field Getters (Backward Compatibility) ====================
     
@@ -245,5 +251,13 @@ public class ProjectRequest {
             case NEST -> nestConfig != null ? nestConfig : new NestConfig();
             case FASTAPI -> fastapiConfig != null ? fastapiConfig : new FastAPIConfig();
         };
+    }
+
+    /**
+     * Gets or creates the FrontendConfig.
+     * Returns frontendConfig if present, or a new default FrontendConfig.
+     */
+    public FrontendConfig getEffectiveFrontendConfig() {
+        return frontendConfig != null ? frontendConfig : new FrontendConfig();
     }
 }
