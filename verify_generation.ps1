@@ -576,6 +576,95 @@ try {
     }
 
     # ============================================================================
+    # PHASE 7B: Verify Frontend Files (if enabled in request)
+    # ============================================================================
+    Write-Phase "7B" "Verify Frontend Files"
+
+    if (Test-Path "$DemoDir/frontend/package.json") {
+        Test-Result "Frontend: package.json exists" $true
+        Test-Result "Frontend: app/layout.tsx exists" (Test-Path "$DemoDir/frontend/app/layout.tsx")
+        Test-Result "Frontend: types/index.ts exists" (Test-Path "$DemoDir/frontend/types/index.ts")
+        Test-Result "Frontend: lib/api.ts exists" (Test-Path "$DemoDir/frontend/lib/api.ts")
+        Test-Result "Frontend: components/navbar.tsx exists" (Test-Path "$DemoDir/frontend/components/navbar.tsx")
+
+        # Check entity CRUD pages exist for each table
+        $entityDirs = Get-ChildItem "$DemoDir/frontend/app" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "login" -and $_.Name -ne "register" }
+        Test-Result "Frontend: Entity CRUD pages generated ($($entityDirs.Count) entities)" ($entityDirs.Count -gt 0)
+    } else {
+        Write-Step "Frontend not enabled in request - skipping frontend verification"
+    }
+
+    # ============================================================================
+    # PHASE 7C: Microservices Verification (using temp_request_microservices.json)
+    # ============================================================================
+    Write-Phase "7C" "Microservices Project Verification"
+
+    $msRequestFile = "temp_request_microservices.json"
+    if (Test-Path $msRequestFile) {
+        Write-Step "Restarting backend for microservices generation..."
+        # Restart backend if needed
+        if ($script:BackendProcess -and $script:BackendProcess.HasExited) {
+            $jarFile = Get-ChildItem "$BackendDir/target/*.jar" -Exclude "*-sources.jar","*-javadoc.jar" | Select-Object -First 1
+            $script:BackendProcess = Start-Process -FilePath "java" -ArgumentList "-jar", $jarFile.FullName `
+                -PassThru -NoNewWindow -RedirectStandardOutput "$ScriptDir/backend_stdout2.log" -RedirectStandardError "$ScriptDir/backend_stderr2.log"
+            $backendReady = Wait-ForHealthCheck "http://localhost:$BackendPort/api/dependencies/recommended"
+            if (-not $backendReady) {
+                Write-Err "Backend failed to restart for microservices test"
+            }
+        }
+
+        Write-Step "Generating microservices project..."
+        $msRequestBody = Get-Content $msRequestFile -Raw
+        $msZipPath = "$ScriptDir/generated_ms_project.zip"
+        $msDemoDir = "$ScriptDir/demo_ms"
+
+        try {
+            Invoke-RestMethod -Uri "http://localhost:$BackendPort/api/generate/project" `
+                -Method POST `
+                -ContentType "application/json" `
+                -Body $msRequestBody `
+                -OutFile $msZipPath `
+                -TimeoutSec 60
+            Test-Result "Microservices: ZIP generated" (Test-Path $msZipPath)
+
+            # Extract
+            Remove-Item $msDemoDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item "$ScriptDir/temp_ms_extract" -Recurse -Force -ErrorAction SilentlyContinue
+            Expand-Archive -Path $msZipPath -DestinationPath "$ScriptDir/temp_ms_extract" -Force
+            $msExtracted = Get-ChildItem "$ScriptDir/temp_ms_extract" -Directory | Select-Object -First 1
+            if ($msExtracted) {
+                Move-Item $msExtracted.FullName $msDemoDir -ErrorAction SilentlyContinue
+            }
+            Remove-Item "$ScriptDir/temp_ms_extract" -Recurse -Force -ErrorAction SilentlyContinue
+
+            # Verify multi-module structure
+            Test-Result "Microservices: parent pom.xml exists" (Test-Path "$msDemoDir/pom.xml")
+            Test-Result "Microservices: discovery-server exists" (Test-Path "$msDemoDir/discovery-server/pom.xml")
+            Test-Result "Microservices: config-server exists" (Test-Path "$msDemoDir/config-server/pom.xml")
+            Test-Result "Microservices: api-gateway exists" (Test-Path "$msDemoDir/api-gateway/pom.xml")
+
+            # Check for service directories
+            $serviceDirs = Get-ChildItem $msDemoDir -Directory | Where-Object { $_.Name -like "*-service" }
+            Test-Result "Microservices: Service modules found ($($serviceDirs.Count))" ($serviceDirs.Count -gt 0)
+
+            # Check parent pom contains <modules>
+            if (Test-Path "$msDemoDir/pom.xml") {
+                $parentPomContent = Get-Content "$msDemoDir/pom.xml" -Raw
+                Test-Result "Microservices: parent pom has <modules>" ($parentPomContent -match "<modules>")
+            }
+
+            # Cleanup
+            Remove-Item $msDemoDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item $msZipPath -Force -ErrorAction SilentlyContinue
+        } catch {
+            Test-Result "Microservices: Generation" $false
+            Write-Err "  Error: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Step "No $msRequestFile found - skipping microservices verification"
+    }
+
+    # ============================================================================
     # PHASE 8: Report
     # ============================================================================
     Write-Phase 8 "Results Summary"

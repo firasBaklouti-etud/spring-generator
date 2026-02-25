@@ -197,3 +197,66 @@ For Node (Future):
   }
 }
 ```
+
+## New Store Types
+
+### Architecture & Microservices
+
+```typescript
+export type ArchitectureType = "MONOLITH" | "MICROSERVICES"
+export type MicroservicesMode = "AUTO" | "MANUAL"
+
+export interface MicroservicesConfig {
+  mode: MicroservicesMode
+  serviceTableMapping: Record<string, string[]>
+  discoveryPort: number
+  configPort: number
+  gatewayPort: number
+  serviceStartPort: number
+}
+```
+
+Added to `SpringConfig`:
+- `architectureType: ArchitectureType` (default: `"MONOLITH"`)
+- `microservicesConfig: MicroservicesConfig`
+
+### Frontend Configuration
+
+```typescript
+export type FrontendFramework = "NEXTJS" | "ANGULAR" | "REACT"
+
+export interface FrontendConfig {
+  enabled: boolean
+  framework: FrontendFramework
+  port: number
+  backendUrl: string
+}
+```
+
+Added to `ProjectConfig`:
+- `frontendConfig: FrontendConfig` (default: `{ enabled: false, framework: "NEXTJS", port: 3000, backendUrl: "http://localhost:8080" }`)
+
+### New Store Actions
+- `setFrontendConfig(config: Partial<FrontendConfig>)` - Update frontend config
+- `setMicroservicesConfig(config: Partial<MicroservicesConfig>)` - Update microservices config
+
+## New UI Sections
+
+### Architecture Type Selector (project-config-phase.tsx)
+When Spring Boot is selected, users can choose between:
+- **Monolith** (default) - Single deployable application
+- **Microservices** - Multi-module Spring Cloud project with service discovery
+
+When Microservices is selected, a configuration panel shows:
+- **Auto mode** - One service per entity, with preview of services to be generated
+- **Manual mode** - User-defined service grouping
+
+### Frontend Generation Toggle (project-config-phase.tsx)
+A toggle to enable/disable frontend generation with:
+- Framework selector: Next.js (active), Angular (coming soon), React (coming soon)
+- Description of what will be generated
+
+### Updated Payload Structure
+The `getProjectPayload()` function now includes:
+- `springConfig.architectureType` and `springConfig.microservicesConfig`
+- `frontendConfig` for all stack types

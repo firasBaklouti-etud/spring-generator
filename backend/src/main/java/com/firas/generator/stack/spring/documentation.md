@@ -128,3 +128,51 @@ sequenceDiagram
     
     Provider-->>Requester: List<FilePreview>
 ```
+
+## Microservices Architecture
+
+### New Configuration Fields
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `architectureType` | String | `MONOLITH` | `"MONOLITH"` or `"MICROSERVICES"` |
+| `microservicesConfig.mode` | String | `AUTO` | `"AUTO"` or `"MANUAL"` |
+| `microservicesConfig.serviceTableMapping` | Map | `{}` | Manual service-to-table grouping |
+| `microservicesConfig.discoveryPort` | int | `8761` | Eureka server port |
+| `microservicesConfig.configPort` | int | `8888` | Config server port |
+| `microservicesConfig.gatewayPort` | int | `8080` | API Gateway port |
+| `microservicesConfig.serviceStartPort` | int | `8081` | Starting port for services |
+
+### Microservices Template Structure
+
+```
+templates/spring/microservices/
+├── parent-pom.xml.ftl              # Multi-module parent POM
+├── docker-compose.yml.ftl          # Full orchestration
+├── discovery-server/
+│   ├── pom.xml.ftl                 # Eureka Server
+│   ├── Application.java.ftl        # @EnableEurekaServer
+│   └── application.yml.ftl         # Eureka config
+├── config-server/
+│   ├── pom.xml.ftl                 # Config Server
+│   ├── Application.java.ftl        # @EnableConfigServer
+│   └── application.yml.ftl         # Config server config
+├── api-gateway/
+│   ├── pom.xml.ftl                 # Spring Cloud Gateway
+│   ├── Application.java.ftl        # @EnableDiscoveryClient
+│   └── application.yml.ftl         # Gateway routes
+└── service/
+    ├── pom.xml.ftl                 # Per-service POM
+    ├── Application.java.ftl        # @EnableDiscoveryClient @EnableFeignClients
+    ├── application.yml.ftl         # Service config
+    └── FeignClient.java.ftl        # Cross-service calls
+```
+
+### Generation Flow for Microservices
+
+1. `SpringStackProvider` checks `architectureType == MICROSERVICES`
+2. Delegates to `MicroservicesGenerator.generateMicroservicesProject()`
+3. Service definitions computed (AUTO: 1 per entity, MANUAL: user-defined)
+4. Infrastructure modules generated (Discovery, Config, Gateway)
+5. Per-service modules generated with CRUD code via `SpringCodeGenerator`
+6. Cross-service `@FeignClient` interfaces generated for inter-service relationships
