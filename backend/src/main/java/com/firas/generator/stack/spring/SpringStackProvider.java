@@ -5,6 +5,7 @@ import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.ProjectRequest;
 import com.firas.generator.model.RelationshipType;
 import com.firas.generator.model.Table;
+import com.firas.generator.model.config.ArchitectureType;
 import com.firas.generator.model.config.SpringConfig;
 import com.firas.generator.service.TemplateService;
 import com.firas.generator.stack.*;
@@ -31,16 +32,19 @@ public class SpringStackProvider implements StackProvider {
     private final SpringCodeGenerator codeGenerator;
     private final SpringTypeMapper typeMapper;
     private final SpringDependencyProvider dependencyProvider;
+    private final MicroservicesGenerator microservicesGenerator;
     
     public SpringStackProvider(
             TemplateService templateService,
             SpringCodeGenerator codeGenerator,
             SpringTypeMapper typeMapper,
-            SpringDependencyProvider dependencyProvider) {
+            SpringDependencyProvider dependencyProvider,
+            MicroservicesGenerator microservicesGenerator) {
         this.templateService = templateService;
         this.codeGenerator = codeGenerator;
         this.typeMapper = typeMapper;
         this.dependencyProvider = dependencyProvider;
+        this.microservicesGenerator = microservicesGenerator;
     }
     
     @Override
@@ -73,15 +77,20 @@ public class SpringStackProvider implements StackProvider {
         // Apply type mappings to all columns
         applyTypeMappings(request);
 
-        List<FilePreview> files = new ArrayList<>();
-
         // Set Spring config on code generator for project structure support
         codeGenerator.setSpringConfig(request.getEffectiveSpringConfig());
+
+        // Branch to microservices generation if configured
+        SpringConfig springConfig = request.getEffectiveSpringConfig();
+        if (springConfig.getArchitectureType() == ArchitectureType.MICROSERVICES) {
+            return microservicesGenerator.generateMicroservicesProject(request);
+        }
+
+        List<FilePreview> files = new ArrayList<>();
 
         try {
         
         // Generate project structure files
-        SpringConfig springConfig = request.getEffectiveSpringConfig();
         if ("gradle".equalsIgnoreCase(springConfig.getBuildTool())) {
             files.add(generateGradleBuild(request));
             files.add(generateSettingsGradle(request));

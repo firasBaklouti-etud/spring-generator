@@ -1,0 +1,219 @@
+{
+    "name": "Demo",
+    "packageName": "com.example.demo",
+    "databaseType": "mysql",
+    "includeEntity": true,
+    "includeRepository": true,
+    "includeService": true,
+    "includeController": true,
+    "includeDto": false,
+    "includeMapper": false,
+    "includeTests": false,
+    "includeDocker": true,
+    "tables": [
+        {
+            "name": "users",
+            "className": "Users",
+            "columns": [
+                {
+                    "name": "id",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "type": "BIGINT",
+                    "primaryKey": true,
+                    "autoIncrement": true,
+                    "nullable": false,
+                    "unique": true,
+                    "foreignKey": false
+                },
+                {
+                    "name": "username",
+                    "fieldName": "username",
+                    "javaType": "String",
+                    "type": "VARCHAR",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": false,
+                    "foreignKey": false
+                },
+                {
+                    "name": "email",
+                    "fieldName": "email",
+                    "javaType": "String",
+                    "type": "VARCHAR",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": true,
+                    "foreignKey": false
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "ONE_TO_MANY",
+                    "sourceTable": "users",
+                    "targetTable": "posts",
+                    "sourceColumn": "id",
+                    "targetColumn": "user_id",
+                    "mappedBy": "users",
+                    "fieldName": "postses",
+                    "targetClassName": "Posts"
+                }
+            ]
+        },
+        {
+            "name": "posts",
+            "className": "Posts",
+            "columns": [
+                {
+                    "name": "id",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "type": "BIGINT",
+                    "primaryKey": true,
+                    "autoIncrement": true,
+                    "nullable": false,
+                    "unique": true,
+                    "foreignKey": false
+                },
+                {
+                    "name": "user_id",
+                    "fieldName": "userId",
+                    "javaType": "Long",
+                    "type": "BIGINT",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": false,
+                    "foreignKey": true,
+                    "referencedTable": "users",
+                    "referencedColumn": "id"
+                },
+                {
+                    "name": "title",
+                    "fieldName": "title",
+                    "javaType": "String",
+                    "type": "VARCHAR",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": false,
+                    "foreignKey": false
+                },
+                {
+                    "name": "content",
+                    "fieldName": "content",
+                    "javaType": "String",
+                    "type": "TEXT",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": true,
+                    "unique": false,
+                    "foreignKey": false
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "MANY_TO_ONE",
+                    "sourceTable": "posts",
+                    "targetTable": "users",
+                    "sourceColumn": "user_id",
+                    "targetColumn": "id",
+                    "fieldName": "users",
+                    "targetClassName": "Users"
+                },
+                {
+                    "type": "ONE_TO_MANY",
+                    "sourceTable": "posts",
+                    "targetTable": "comments",
+                    "sourceColumn": "id",
+                    "targetColumn": "post_id",
+                    "mappedBy": "posts",
+                    "fieldName": "commentses",
+                    "targetClassName": "Comments"
+                }
+            ]
+        },
+        {
+            "name": "comments",
+            "className": "Comments",
+            "columns": [
+                {
+                    "name": "id",
+                    "fieldName": "id",
+                    "javaType": "Long",
+                    "type": "BIGINT",
+                    "primaryKey": true,
+                    "autoIncrement": true,
+                    "nullable": false,
+                    "unique": true,
+                    "foreignKey": false
+                },
+                {
+                    "name": "post_id",
+                    "fieldName": "postId",
+                    "javaType": "Long",
+                    "type": "BIGINT",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": false,
+                    "foreignKey": true,
+                    "referencedTable": "posts",
+                    "referencedColumn": "id"
+                },
+                {
+                    "name": "content",
+                    "fieldName": "content",
+                    "javaType": "String",
+                    "type": "TEXT",
+                    "primaryKey": false,
+                    "autoIncrement": false,
+                    "nullable": false,
+                    "unique": false,
+                    "foreignKey": false
+                }
+            ],
+            "relationships": [
+                {
+                    "type": "MANY_TO_ONE",
+                    "sourceTable": "comments",
+                    "targetTable": "posts",
+                    "sourceColumn": "post_id",
+                    "targetColumn": "id",
+                    "fieldName": "posts",
+                    "targetClassName": "Posts"
+                }
+            ]
+        }
+    ],
+    "springConfig": {
+        "groupId": "com.example",
+        "artifactId": "demo",
+        "javaVersion": "17",
+        "bootVersion": "3.2.0",
+        "buildTool": "maven",
+        "packaging": "jar",
+        "projectStructure": "LAYERED",
+        "migrationTool": "none",
+        "architectureType": "MICROSERVICES",
+        "microservicesConfig": {
+            "mode": "MANUAL",
+            "serviceTableMapping": {
+                "user-service": ["users"],
+                "content-service": ["posts", "comments"]
+            },
+            "discoveryPort": 8761,
+            "configPort": 8888,
+            "gatewayPort": 8080,
+            "serviceStartPort": 8081
+        }
+    },
+    "frontendConfig": {
+        "enabled": true,
+        "framework": "NEXTJS",
+        "port": 3000,
+        "backendUrl": "http://localhost:8080"
+    }
+}

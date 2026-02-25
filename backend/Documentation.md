@@ -193,4 +193,74 @@ sequenceDiagram
 | **Strategy** | `StackProvider`, `CodeGenerator` | Swap algorithms based on selected stack. |
 | **Factory** | `StackProviderFactory` | Create the correct provider at runtime. |
 | **Factory** | `SqlConnectionFactory` | Create correct DB connection for parsing. |
+| **Factory** | `FrontendProviderFactory` | Create the correct frontend provider at runtime. |
 | **Template Method** | `AbstractStackProvider` | Define skeleton of generation, let subclasses fill details. |
+
+## Microservices Architecture
+
+### MicroservicesConfig Model
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `mode` | String | `"AUTO"` | `AUTO` (1 service per entity) or `MANUAL` (user-defined grouping) |
+| `serviceTableMapping` | `Map<String, List<String>>` | `{}` | For MANUAL mode: maps service names to table names |
+| `discoveryPort` | int | `8761` | Eureka discovery server port |
+| `configPort` | int | `8888` | Spring Cloud Config server port |
+| `gatewayPort` | int | `8080` | API Gateway port |
+| `serviceStartPort` | int | `8081` | Starting port for individual services |
+
+### MicroservicesGenerator Service
+
+The `MicroservicesGenerator` is a `@Component` that generates multi-module Spring Cloud projects when `architectureType == MICROSERVICES`. It produces:
+
+1. **Parent POM** - Multi-module aggregator with Spring Cloud BOM
+2. **Discovery Server** - Eureka Server module
+3. **Config Server** - Spring Cloud Config module
+4. **API Gateway** - Spring Cloud Gateway with routes for each service
+5. **Per-service modules** - Each with its own CRUD code, Eureka client, and Feign clients for cross-service communication
+6. **Docker Compose** - Full orchestration file (optional)
+
+### Generation Flow
+
+```
+SpringStackProvider.generateProject()
+  ├─ architectureType == MONOLITH → existing monolith flow
+  └─ architectureType == MICROSERVICES → MicroservicesGenerator.generateMicroservicesProject()
+       ├─ computeServiceDefinitions() (AUTO or MANUAL mode)
+       ├─ generateParentPom()
+       ├─ generateInfrastructureModules() (Discovery, Config, Gateway)
+       ├─ for each service:
+       │    ├─ service pom.xml, application.yml, Application.java
+       │    ├─ SpringCodeGenerator for Entity/Repository/Service/Controller
+       │    └─ FeignClient interfaces for cross-service relationships
+       └─ generateDockerCompose() (if includeDocker)
+```
+
+## Frontend Generation
+
+### FrontendProvider Interface
+
+```java
+public interface FrontendProvider {
+    String getFramework();          // "NEXTJS", "ANGULAR", "REACT"
+    List<FilePreview> generateFrontend(ProjectRequest request) throws IOException;
+    boolean isAvailable();
+}
+```
+
+### NextJsFrontendProvider
+
+Generates a complete Next.js frontend with:
+- TypeScript interfaces from table/column metadata
+- Tailwind CSS styling
+- CRUD pages for each entity (list, create, detail, edit)
+- API client with auth token injection
+- Authentication pages (if security enabled)
+- Navigation component with entity links
+
+### Updated API Reference
+
+The `ProjectRequest` now includes:
+- `springConfig.architectureType` - `"MONOLITH"` (default) or `"MICROSERVICES"`
+- `springConfig.microservicesConfig` - Microservices-specific settings
+- `frontendConfig` - Frontend generation settings (`enabled`, `framework`, `port`, `backendUrl`)

@@ -15,6 +15,15 @@ This project is a **Multi-Stack Project Generator** capable of generating Spring
 - **[Spring Boot Stack](backend/src/main/java/com/firas/generator/stack/spring/documentation.md)**  
   Implementation details for the Spring Boot generator, including templates and type mapping.
 
+- **[Frontend Generation](backend/src/main/java/com/firas/generator/frontend/documentation.md)**  
+  FrontendProvider interface, NextJsFrontendProvider implementation, and template system.
+
+## 🏗️ Architecture Features
+
+- **Microservices Architecture**: Generate multi-module Spring Cloud projects with Eureka, Config Server, API Gateway, and per-service modules. Supports AUTO mode (one service per entity) and MANUAL mode (custom service grouping).
+
+- **Frontend Generation**: Generate Next.js frontends with TypeScript, Tailwind CSS, and CRUD pages for all entities. Extensible to Angular and React via the FrontendProvider factory pattern.
+
 ## 🚀 Key Features
 
 *   **Multi-Database SQL Parsing**: Supports MySQL, PostgreSQL, etc.

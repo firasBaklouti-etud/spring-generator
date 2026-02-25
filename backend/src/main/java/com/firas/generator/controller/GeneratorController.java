@@ -4,6 +4,8 @@ import com.firas.generator.model.DownloadRequest;
 import com.firas.generator.model.FilePreview;
 import com.firas.generator.model.ProjectRequest;
 import com.firas.generator.model.ProjectPreviewResponse;
+import com.firas.generator.model.config.FrontendConfig;
+import com.firas.generator.frontend.FrontendProviderFactory;
 import com.firas.generator.stack.StackProvider;
 import com.firas.generator.stack.StackProviderFactory;
 import com.firas.generator.stack.StackType;
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,6 +46,11 @@ public class GeneratorController {
     private final StackProviderFactory stackProviderFactory;
 
     /**
+     * Factory for retrieving frontend providers
+     */
+    private final FrontendProviderFactory frontendProviderFactory;
+
+    /**
      * Generates a complete project based on the provided configuration.
      * 
      * This endpoint accepts a project request containing:
@@ -65,11 +73,20 @@ public class GeneratorController {
         StackType stackType = request.getStackType() != null ? request.getStackType() : StackType.SPRING;
         StackProvider provider = stackProviderFactory.getProvider(stackType);
         
-        // Generate the project
-        byte[] zipContent = provider.generateProjectZip(request);
+        // Get backend files
+        List<FilePreview> allFiles = new ArrayList<>(provider.generateProject(request));
+        
+        // Append frontend files if enabled
+        FrontendConfig fc = request.getEffectiveFrontendConfig();
+        if (fc.isEnabled() && frontendProviderFactory.hasProvider(fc.getFramework())) {
+            allFiles.addAll(frontendProviderFactory.getProvider(fc.getFramework()).generateFrontend(request));
+        }
         
         // Determine filename
         String filename = getProjectName(request, stackType);
+        
+        // Create ZIP from combined files
+        byte[] zipContent = ZipUtils.createZipFromFilePreviews(allFiles, filename);
         
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename + ".zip")
@@ -93,9 +110,16 @@ public class GeneratorController {
         StackType stackType = request.getStackType() != null ? request.getStackType() : StackType.SPRING;
         StackProvider provider = stackProviderFactory.getProvider(stackType);
         
-        // Generate preview files
-        List<FilePreview> files = provider.generateProject(request);
-        return ResponseEntity.ok(new ProjectPreviewResponse(files));
+        // Get backend files
+        List<FilePreview> allFiles = new ArrayList<>(provider.generateProject(request));
+        
+        // Append frontend files if enabled
+        FrontendConfig fc = request.getEffectiveFrontendConfig();
+        if (fc.isEnabled() && frontendProviderFactory.hasProvider(fc.getFramework())) {
+            allFiles.addAll(frontendProviderFactory.getProvider(fc.getFramework()).generateFrontend(request));
+        }
+        
+        return ResponseEntity.ok(new ProjectPreviewResponse(allFiles));
     }
     
     /**

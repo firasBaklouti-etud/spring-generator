@@ -45,6 +45,12 @@ public class SpringConfig {
     /** Programming language: "java" or "kotlin" */
     private String language = "java";
 
+    /** Architecture type: MONOLITH or MICROSERVICES */
+    private ArchitectureType architectureType = ArchitectureType.MONOLITH;
+
+    /** Microservices-specific configuration (only used when architectureType == MICROSERVICES) */
+    private MicroservicesConfig microservicesConfig;
+
     // Constructors
     public SpringConfig() {}
     
@@ -86,4 +92,10 @@ public class SpringConfig {
 
     public String getLanguage() { return language; }
     public void setLanguage(String language) { this.language = language; }
+
+    public ArchitectureType getArchitectureType() { return architectureType; }
+    public void setArchitectureType(ArchitectureType architectureType) { this.architectureType = architectureType; }
+
+    public MicroservicesConfig getMicroservicesConfig() { return microservicesConfig; }
+    public void setMicroservicesConfig(MicroservicesConfig microservicesConfig) { this.microservicesConfig = microservicesConfig; }
 }

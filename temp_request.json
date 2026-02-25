@@ -426,6 +426,13 @@
         "buildTool": "maven",
         "packaging": "jar",
         "projectStructure": "LAYERED",
-        "migrationTool": "none"
+        "migrationTool": "none",
+        "architectureType": "MONOLITH"
+    },
+    "frontendConfig": {
+        "enabled": true,
+        "framework": "NEXTJS",
+        "port": 3000,
+        "backendUrl": "http://localhost:8080"
     }
 }
