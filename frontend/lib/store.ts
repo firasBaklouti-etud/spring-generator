@@ -32,6 +32,27 @@ export const AVAILABLE_STRUCTURES: ProjectStructureInfo[] = [
   { id: "HEXAGONAL", displayName: "Hexagonal (Clean Architecture)", description: "Ports and adapters architecture with clear separation of concerns" },
 ]
 
+export type ArchitectureType = "MONOLITH" | "MICROSERVICES"
+export type MicroservicesMode = "AUTO" | "MANUAL"
+
+export interface MicroservicesConfig {
+  mode: MicroservicesMode
+  serviceTableMapping: Record<string, string[]>
+  discoveryPort: number
+  configPort: number
+  gatewayPort: number
+  serviceStartPort: number
+}
+
+export type FrontendFramework = "NEXTJS" | "ANGULAR" | "REACT"
+
+export interface FrontendConfig {
+  enabled: boolean
+  framework: FrontendFramework
+  port: number
+  backendUrl: string
+}
+
 export interface SpringConfig {
   groupId: string
   artifactId: string
@@ -43,6 +64,8 @@ export interface SpringConfig {
   migrationTool: "none" | "flyway" | "liquibase"
   configFormat: "properties" | "yml"
   language: "java" | "kotlin"
+  architectureType: ArchitectureType
+  microservicesConfig: MicroservicesConfig
 }
 
 export interface NodeConfig {
@@ -150,6 +173,7 @@ export interface ProjectConfig {
   nestConfig: NestConfig
   fastapiConfig: FastAPIConfig
   securityConfig: SecurityConfig
+  frontendConfig: FrontendConfig
 }
 
 export interface SecurityRule {
@@ -255,6 +279,8 @@ interface GeneratorStore {
   setNodeConfig: (config: Partial<NodeConfig>) => void
   setNestConfig: (config: Partial<NestConfig>) => void
   setFastAPIConfig: (config: Partial<FastAPIConfig>) => void
+  setFrontendConfig: (config: Partial<FrontendConfig>) => void
+  setMicroservicesConfig: (config: Partial<MicroservicesConfig>) => void
 
   // Preview files
   previewFiles: FilePreview[]
@@ -292,6 +318,15 @@ const defaultSpringConfig: SpringConfig = {
   migrationTool: "none",
   configFormat: "properties",
   language: "java",
+  architectureType: "MONOLITH",
+  microservicesConfig: {
+    mode: "AUTO",
+    serviceTableMapping: {},
+    discoveryPort: 8761,
+    configPort: 8888,
+    gatewayPort: 8080,
+    serviceStartPort: 8081,
+  },
 }
 
 const defaultNodeConfig: NodeConfig = {
@@ -339,6 +374,12 @@ const defaultProjectConfig: ProjectConfig = {
     enabled: false,
     authenticationType: "BASIC",
     useDbAuth: false,
+  },
+  frontendConfig: {
+    enabled: false,
+    framework: "NEXTJS",
+    port: 3000,
+    backendUrl: "http://localhost:8080",
   },
 }
 
@@ -432,6 +473,23 @@ export const useGeneratorStore = create<GeneratorStore>((set, get) => ({
       projectConfig: {
         ...state.projectConfig,
         fastapiConfig: { ...state.projectConfig.fastapiConfig, ...config },
+      },
+    })),
+  setFrontendConfig: (config: Partial<FrontendConfig>) =>
+    set((state) => ({
+      projectConfig: {
+        ...state.projectConfig,
+        frontendConfig: { ...state.projectConfig.frontendConfig, ...config },
+      },
+    })),
+  setMicroservicesConfig: (config: Partial<MicroservicesConfig>) =>
+    set((state) => ({
+      projectConfig: {
+        ...state.projectConfig,
+        springConfig: {
+          ...state.projectConfig.springConfig,
+          microservicesConfig: { ...state.projectConfig.springConfig.microservicesConfig, ...config },
+        },
       },
     })),
   setSecurityConfig: (config: Partial<SecurityConfig>) =>
